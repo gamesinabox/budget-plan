@@ -905,6 +905,12 @@ let rt; $('reset').onclick = () => {
 
 function init() { buildBudget(); buildItin(); buildScenarios(); buildResults(); buildTracker(); buildGoals(); buildRecurring(); update(); syncGuess(); }
 init(); showTab(location.hash.slice(1));
+// Ready to type on a computer; on a phone, wait for a tap so the keyboard doesn't jump up and shift the page on open.
+if (matchMedia('(pointer: fine)').matches && ['', 'week'].includes(location.hash.slice(1))) qn.focus();
+// Hide the bottom bar while typing (phones push fixed bars up over the content when the keyboard opens).
+const isTyping = el => el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|file|date|month)$/.test(el.type)));
+document.addEventListener('focusin', e => document.body.classList.toggle('typing', isTyping(e.target)));
+document.addEventListener('focusout', () => setTimeout(() => document.body.classList.toggle('typing', isTyping(document.activeElement)), 0));
 // Offline support and home-screen install (needs http(s); skipped when opened as a file).
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

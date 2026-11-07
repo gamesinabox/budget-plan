@@ -86,13 +86,15 @@ section[hidden],[hidden]{display:none!important}
 .qamt .dollar{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:21px;font-weight:600;pointer-events:none}
 .qamt input{height:54px;font-size:23px;font-weight:700;padding:0 14px 0 32px;font-variant-numeric:tabular-nums}
 .add{height:54px;min-width:104px;padding:0 24px;border:0;border-radius:14px;background:var(--s1);color:#fff;font:750 17px var(--font);cursor:pointer;box-shadow:0 6px 16px color-mix(in srgb,var(--s1) 35%,transparent);transition:transform .08s,filter .15s}
-.add:hover{filter:brightness(1.07)} .add:active{transform:scale(.97)}
+.add:active{transform:scale(.97)}
 .quick[data-kind="in"] .add{background:var(--good);box-shadow:0 6px 16px color-mix(in srgb,var(--good) 35%,transparent)}
-.qmeta{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-.chipsel{position:relative;display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border-radius:999px;background:var(--wash);border:1px solid var(--border);font:600 14px var(--font);color:var(--ink);max-width:100%}
-.chipsel select{appearance:none;-webkit-appearance:none;border:0;background:transparent;font:600 14px var(--font);color:var(--ink);padding:0 16px 0 0;height:100%;cursor:pointer;min-width:0;max-width:220px;text-overflow:ellipsis}
+.qmeta{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:10px}
+.qmeta .chipsel{min-width:0}
+.qmeta .chipsel select{width:100%;max-width:none;overflow:hidden;white-space:nowrap}
+.chipsel{position:relative;display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 12px;border-radius:999px;background:var(--wash);border:1px solid var(--border);font:600 14px var(--font);color:var(--ink);max-width:100%}
+.chipsel select{appearance:none;-webkit-appearance:none;border:0;background:transparent;font:600 16px var(--font);color:var(--ink);padding:0 16px 0 0;height:100%;cursor:pointer;min-width:0;max-width:220px;text-overflow:ellipsis}
 .chipsel:not(.when):not(.static)::after{content:"";position:absolute;right:12px;top:15px;border:4.5px solid transparent;border-top-color:var(--ink2);pointer-events:none}
-.when input{border:0;background:transparent;font:600 14px var(--font);color:var(--ink2);padding:0;height:100%;width:auto;cursor:pointer}
+.when input{border:0;background:transparent;font:600 16px var(--font);color:var(--ink2);padding:0;height:100%;width:auto;cursor:pointer}
 .when input.past{color:var(--s2)}
 .when:has(input.past){border-color:var(--s2);background:color-mix(in srgb,var(--s2) 10%,var(--surface))}
 .hint{font-size:12.5px;color:var(--muted);margin:8px 2px 0}
@@ -154,13 +156,9 @@ section[hidden],[hidden]{display:none!important}
 .lday:first-child{padding-top:10px}
 .lamt{font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap}
 .k-in .lamt{color:var(--good)} .k-save .lamt{color:var(--s1)}
-.lcat{position:relative}
-.lcat select{appearance:none;-webkit-appearance:none;border:0;background:none;color:var(--ink2);font:500 13px var(--font);padding:0 14px 0 0;cursor:pointer;max-width:190px;text-overflow:ellipsis}
-.lcat::after{content:"";position:absolute;right:2px;top:7px;border:4px solid transparent;border-top-color:var(--muted);pointer-events:none}
 .ltime{font-variant-numeric:tabular-nums}
 .x{border:0;background:none;color:var(--muted);width:34px;height:34px;border-radius:10px;cursor:pointer;display:grid;place-items:center;flex:none;margin-right:-8px}
 .x .ic{width:17px;height:17px}
-.x:hover{background:var(--wash);color:var(--crit)}
 
 /* ---------- pills ---------- */
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:3px 10px 3px 4px;border-radius:999px;border:1px solid var(--border);background:var(--wash);color:var(--ink);white-space:nowrap}
@@ -217,17 +215,16 @@ table.mini{min-width:0;margin-top:6px}
 .tile .val{font-size:15px;font-weight:750;text-align:right}
 .tile .note{display:none}
 .tile .pill{grid-column:1/-1;justify-self:start;margin-top:5px}
-.subnav{grid-template-columns:repeat(5,1fr);margin:14px 0 4px;position:sticky;top:0;z-index:2}
+.subnav{grid-template-columns:repeat(5,1fr);margin:14px 0 4px;position:sticky;top:env(safe-area-inset-top, 0px);z-index:2}
 .plansec h2{margin:24px 0 10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink2);font-weight:600}
 input,select,textarea{font:16px var(--font);color:var(--ink);background:var(--surface);border:1px solid var(--base);border-radius:10px;padding:8px 10px;width:100%;min-width:0}
 input[type=checkbox]{width:20px;height:20px;accent-color:var(--s1);cursor:pointer}
-td input,td select{padding:6px 8px;font-size:15px}
+td input,td select{padding:6px 8px;font-size:16px}
 td input[type=number]{text-align:right}
 td.c{text-align:center}
 button.btn,button.ghost{font:650 14px var(--font);border-radius:10px;padding:9px 14px;cursor:pointer;border:1px solid var(--base);background:var(--surface);color:var(--ink)}
-button.btn:hover,button.ghost:hover{background:var(--wash)}
 button.ghost{border-color:transparent;color:var(--ink2);padding:5px 8px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 .scroll{overflow-x:auto;border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
@@ -252,7 +249,7 @@ table.kv td:first-child{white-space:normal}
 #tip b{display:block;margin-bottom:2px}
 #tip span{display:flex;justify-content:space-between;gap:14px;color:var(--ink2)}
 #tip span em{font-style:normal;color:var(--ink);font-variant-numeric:tabular-nums}
-textarea{min-height:120px;font:13px ui-monospace,Menlo,Consolas,monospace}
+textarea{min-height:120px;font:16px ui-monospace,Menlo,Consolas,monospace}
 .cap{font-size:13px;color:var(--ink2);margin:0 0 6px}
 
 /* ---------- bottom nav ---------- */
@@ -275,7 +272,7 @@ textarea{min-height:120px;font:13px ui-monospace,Menlo,Consolas,monospace}
 /* ---------- entry rows are buttons: tap to edit ---------- */
 button.lrow{width:100%;background:none;border:0;border-bottom:1px solid var(--grid);font:inherit;color:inherit;text-align:left;cursor:pointer}
 button.lrow:last-child{border-bottom:0}
-button.lrow:hover,button.lrow:focus-visible{background:var(--wash)}
+button.lrow:focus-visible{background:var(--wash)}
 .lrow .ri-main,.lrow .ri-top,.lrow .ri-sub{display:flex}
 .lrow .ri-main{flex-direction:column}
 .linkbtn{border:0;background:none;padding:0;color:var(--s1);font:650 14px var(--font);cursor:pointer}
@@ -333,7 +330,7 @@ button.lrow:hover,button.lrow:focus-visible{background:var(--wash)}
 .toast button[hidden]{display:none}
 
 /* ---------- edit sheet ---------- */
-.sheet{border:0;padding:0;margin:auto auto 0;width:min(680px,100%);max-width:100%;max-height:92vh;border-radius:24px 24px 0 0;background:var(--surface);color:var(--ink);box-shadow:0 -10px 40px rgba(0,0,0,.25)}
+.sheet{border:0;padding:0;margin:auto auto 0;width:min(680px,100%);max-width:100%;max-height:92vh;max-height:92dvh;border-radius:24px 24px 0 0;background:var(--surface);color:var(--ink);box-shadow:0 -10px 40px rgba(0,0,0,.25)}
 .sheet::backdrop{background:rgba(0,0,0,.4)}
 .sheet[open]{animation:up .22s ease-out}
 @keyframes up{from{transform:translateY(40px)}}
@@ -377,4 +374,26 @@ button.lrow:hover,button.lrow:focus-visible{background:var(--wash)}
   .btable tfoot tr{display:flex;justify-content:space-between;padding:10px 12px;background:var(--wash)}
   .btable tfoot td{padding:0;border:0;background:none}
   .btable tfoot td:empty{display:none}
+}
+
+/* ---------- feel like an app, not a web page ---------- */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation} /* no double-tap zoom */
+html,body{overscroll-behavior:none}  /* no rubber-band bounce or pull-to-refresh */
+body{overflow-x:clip}                 /* nothing can make the page scroll sideways (clip keeps sticky working) */
+img,svg,table{max-width:100%}
+.wrap{overflow-wrap:anywhere}
+/* iPhone date fields have a built-in minimum width that can push past their box */
+input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;display:block;min-height:44px}
+.when input[type=date]{min-height:0;display:inline-block}
+input[type=date]::-webkit-date-and-time-value{text-align:left}
+/* buttons and the nav behave like controls: no text selection or long-press callout */
+button,.bnav,.kind,.seg,.fav,.chipsel{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* while the keyboard is up, the bottom bar gets out of the way instead of riding up on top of it */
+body.typing .bnav{transform:translate(-50%,130%);transition:transform .15s}
+body.typing .toast{bottom:16px}
+@media (hover:hover){
+  .add:hover{filter:brightness(1.07)}
+  .x:hover{background:var(--wash);color:var(--crit)}
+  button.btn:hover,button.ghost:hover{background:var(--wash)}
+  button.lrow:hover{background:var(--wash)}
 }

@@ -217,7 +217,7 @@ table.mini{min-width:0;margin-top:6px}
 .tile .val{font-size:15px;font-weight:750;text-align:right}
 .tile .note{display:none}
 .tile .pill{grid-column:1/-1;justify-self:start;margin-top:5px}
-.subnav{grid-template-columns:repeat(4,1fr);margin:14px 0 4px;position:sticky;top:0;z-index:2}
+.subnav{grid-template-columns:repeat(5,1fr);margin:14px 0 4px;position:sticky;top:0;z-index:2}
 .plansec h2{margin:24px 0 10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink2);font-weight:600}
@@ -271,6 +271,80 @@ textarea{min-height:120px;font:13px ui-monospace,Menlo,Consolas,monospace}
   background:var(--ink);color:var(--bg);padding:11px 12px 11px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:14px;transition:transform .25s ease,opacity .25s;z-index:30}
 .toast.on{transform:translate(-50%,0);opacity:1;pointer-events:auto}
 .toast button{border:0;background:color-mix(in srgb,var(--bg) 18%,transparent);color:var(--bg);font:750 14px var(--font);padding:6px 12px;border-radius:9px;cursor:pointer}
+
+/* ---------- entry rows are buttons: tap to edit ---------- */
+button.lrow{width:100%;background:none;border:0;border-bottom:1px solid var(--grid);font:inherit;color:inherit;text-align:left;cursor:pointer}
+button.lrow:last-child{border-bottom:0}
+button.lrow:hover,button.lrow:focus-visible{background:var(--wash)}
+.lrow .ri-main,.lrow .ri-top,.lrow .ri-sub{display:flex}
+.lrow .ri-main{flex-direction:column}
+.linkbtn{border:0;background:none;padding:0;color:var(--s1);font:650 14px var(--font);cursor:pointer}
+
+/* ---------- due today ---------- */
+.stack{display:flex;flex-direction:column;gap:10px}
+#due:not(:empty){margin-bottom:12px}
+.duecard{padding:14px 14px 12px;border:1.5px solid color-mix(in srgb,var(--s1) 35%,var(--border))}
+.duecard.k-in{border-color:color-mix(in srgb,var(--good) 45%,var(--border));background:linear-gradient(140deg,color-mix(in srgb,var(--good) 9%,var(--surface)),var(--surface) 70%)}
+.duetop{display:flex;gap:12px;align-items:center}
+.duerow{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-top:12px}
+.dueamt{position:relative;display:block}
+.dueamt span{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:600}
+.dueamt input{height:46px;padding-left:26px;font-size:18px;font-weight:700;border-radius:12px;background:var(--wash);border:1.5px solid transparent}
+.duerow .add{height:46px;min-width:0;padding:0 18px;font-size:15px}
+.duerow .btn{height:46px}
+.duecard.k-in .add{background:var(--good);box-shadow:none}
+
+/* ---------- forecast, recap, nudge ---------- */
+.forecast{display:flex;gap:12px;align-items:flex-start;padding:16px 18px;margin-top:12px}
+.bignum.neg{color:var(--crit)}
+.forecast .bignum{color:var(--ink)}
+.recap{padding:14px 16px;margin-bottom:12px;border:1.5px solid color-mix(in srgb,var(--s1) 30%,var(--border))}
+.recap h2{font-size:15px}
+.recap ul{margin:8px 0 0;padding-left:18px;font-size:14px;line-height:1.55}
+.nag{display:flex;gap:12px;align-items:center;padding:12px 10px 12px 14px;margin-bottom:12px;border:1.5px solid color-mix(in srgb,var(--warn) 50%,var(--border))}
+.nag .ri-sub{display:block}
+.streak{display:inline-flex;align-items:center;gap:3px;margin-left:6px;color:var(--s2);font-weight:700}
+.streak .ic{width:14px;height:14px}
+
+/* ---------- history ---------- */
+.search{display:flex;align-items:center;gap:8px;height:50px;padding:0 14px;border-radius:14px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:10px;color:var(--muted)}
+.search input{border:0;background:transparent;font-size:17px;padding:0;height:100%;outline:none}
+.search:focus-within{border-color:var(--s1)}
+.seg4{grid-template-columns:repeat(4,1fr)}
+.filters{display:flex;gap:8px;margin:10px 0 4px;flex-wrap:wrap}
+.filters .chipsel{position:relative}
+.filters .chipsel::after{content:"";position:absolute;right:12px;top:15px;border:4.5px solid transparent;border-top-color:var(--ink2);pointer-events:none}
+.hsum{font-size:13.5px;color:var(--ink2);margin:8px 4px 10px;min-height:1.2em}
+
+/* ---------- settings ---------- */
+.pad{padding:14px 16px}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.grid3 > :last-child{grid-column:1/-1}
+.subnav button{font-size:13px;padding:0 2px}
+.recrow > .f{margin-top:10px}
+.rowend{display:flex;justify-content:flex-end;margin-top:6px}
+.bkline{margin:0 0 4px;font-size:15px}
+.filebtn{display:inline-flex;align-items:center;height:54px;padding:0 18px;border-radius:14px;cursor:pointer}
+.plansec .add{min-width:0}
+.tag.good{color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,transparent)}
+.toast.warn{background:#5a3b00;color:#fff}
+.toast.warn button{color:#fff;background:rgba(255,255,255,.18)}
+.toast button[hidden]{display:none}
+
+/* ---------- edit sheet ---------- */
+.sheet{border:0;padding:0;margin:auto auto 0;width:min(680px,100%);max-width:100%;max-height:92vh;border-radius:24px 24px 0 0;background:var(--surface);color:var(--ink);box-shadow:0 -10px 40px rgba(0,0,0,.25)}
+.sheet::backdrop{background:rgba(0,0,0,.4)}
+.sheet[open]{animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px)}}
+.sheet form{padding:10px 18px calc(18px + var(--safe-b));display:flex;flex-direction:column;gap:12px}
+.grab{width:40px;height:5px;border-radius:9px;background:var(--base);margin:0 auto 4px}
+.sheet h2{font-size:19px}
+.sheet input,.sheet select{height:48px;font-size:17px;border-radius:12px}
+.sheet-actions{display:grid;grid-template-columns:auto auto 1fr;gap:8px;margin-top:4px}
+.sheet-actions .btn{height:50px;border-radius:14px}
+.sheet-actions .add{height:50px}
+.btn.danger{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 40%,var(--base))}
 
 /* ---------- wider screens ---------- */
 @media (min-width:700px){

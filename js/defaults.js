@@ -1,5 +1,5 @@
 /* Demo starting data: same shape as the real plan, round example numbers.
-   Real figures live in personal.json (gitignored). Load it once through Data > "Load from the box". */
+   Real figures live in personal.json (gitignored). Load it once through Plan > Settings > Restore from file. */
 window.DEFAULTS = {
   takeHome: 1200,
   items: [

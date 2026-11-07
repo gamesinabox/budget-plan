@@ -103,15 +103,40 @@
   }
 
   const addDays = (ds, n) => iso(new Date(d(ds).getTime() + n * 864e5));
-  const weekStart = ds => addDays(ds, -((d(ds).getUTCDay() + 6) % 7)); // Monday
+  const dow = ds => (d(ds).getUTCDay() + 6) % 7; // Monday = 0
+  const weekStart = (ds, startDow) => addDays(ds, -((dow(ds) - (startDow || 0) + 7) % 7));
   const rowIndexFor = (tracker, ds) => tracker.findIndex(r => r.date && r.date <= ds && ds < addDays(r.date, 7));
   const r2 = n => Math.round(n * 100) / 100;
+  const daysBetween = (a, b) => Math.round((d(b) - d(a)) / 864e5);
+  /* Same day next month (clamped: 31 Jan -> 28 Feb). */
+  function addMonths(ds, n, day) {
+    const x = d(ds), y = x.getUTCFullYear(), m = x.getUTCMonth() + n, want = day || x.getUTCDate();
+    const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return iso(new Date(Date.UTC(y, m, Math.min(want, dim))));
+  }
 
-  /* Adds (or with a negative amount removes) a purchase to the tracker row for its week, creating the row if needed. Mutates tracker. */
-  function addToTracker(tracker, ds, group, amt) {
+  /* ---------- pay periods ---------- */
+  /* s.period = { every: 'week' | 'fortnight' | 'month', anchor: a payday }. Budget periods run payday to payday. */
+  const periodStartDow = s => (s && s.period && s.period.anchor && s.period.every !== 'month' ? dow(s.period.anchor) : 0);
+  function periodOf(s, ds) {
+    const p = (s && s.period) || {}, every = p.every || 'week', anchor = p.anchor || '2026-11-02';
+    if (every === 'month') {
+      const day = d(anchor).getUTCDate();
+      let start = addMonths(ds.slice(0, 8) + '01', 0, day);
+      if (start > ds) start = addMonths(ds.slice(0, 8) + '01', -1, day);
+      const end = addMonths(start.slice(0, 8) + '01', 1, day);
+      return { every, start, end, days: daysBetween(start, end) };
+    }
+    const n = every === 'fortnight' ? 14 : 7, k = Math.floor(daysBetween(anchor, ds) / n), start = addDays(anchor, k * n);
+    return { every, start, end: addDays(start, n), days: n };
+  }
+
+  /* Adds (or with a negative amount removes) a purchase to the tracker row for its week, creating the row if needed. Mutates tracker.
+     startDow puts new rows on your payday's weekday. */
+  function addToTracker(tracker, ds, group, amt, startDow) {
     let i = rowIndexFor(tracker, ds);
     if (i < 0) {
-      tracker.push({ date: weekStart(ds), v: {} });
+      tracker.push({ date: weekStart(ds, startDow), v: {} });
       tracker.sort((a, b) => String(a.date).localeCompare(String(b.date)));
       i = rowIndexFor(tracker, ds);
     }
@@ -124,32 +149,96 @@
   const inRange = (e, from, to) => { const ds = String(e.t).slice(0, 10); return ds >= from && ds < to; };
   const billPaidIn = (log, from, to) => sumKind(log, 'out', e => e.bill && inRange(e, from, to));
 
-  /* Week view. Bills (items ticked as bills in the budget) cost their weekly share every week, whenever you pay them,
-     so a monthly or yearly bill never makes one week look bad. Day-to-day spending not logged yet counts at its full plan. */
-  function weekStatus(s, todayDs) {
-    const i = rowIndexFor(s.tracker || [], todayDs), row = i < 0 ? null : s.tracker[i];
-    const start = row ? row.date : weekStart(todayDs), end = addDays(start, 7);
-    const gp = groupPlan(s, it => !it.bill);
+  /* The current pay period (payday to payday). Weekly plans are scaled to the period's length.
+     Bills (items ticked as bills) cost their share every period, whenever you pay them, so a monthly or yearly bill
+     never makes one period look bad. Day-to-day spending not logged yet counts at its full plan. */
+  function periodStatus(s, todayDs) {
+    const P = periodOf(s, todayDs), f = P.days / 7;
+    const gp = Object.fromEntries(Object.entries(groupPlan(s, it => !it.bill)).map(([g, v]) => [g, v * f]));
     const billsWeekly = s.items.filter(it => it.bill).reduce((a, it) => a + weekly(it), 0);
-    // Tracker row may hold totals typed in by hand; take out bill payments logged this week so they aren't counted twice.
-    const billsByGroup = {};
-    (s.log || []).forEach(e => { if ((e.kind || 'out') === 'out' && e.bill && inRange(e, start, end)) billsByGroup[e.group] = num(billsByGroup[e.group]) + num(e.amt); });
     const spent = {};
-    let left = 0, flexPlan = 0, flexSpent = 0, projected = billsWeekly;
+    let left = 0, flexPlan = 0, flexSpent = 0, projected = billsWeekly * f;
     GROUPS.forEach(g => {
-      const sp = spent[g] = Math.max(0, r2(num(row && row.v[g]) - num(billsByGroup[g])));
+      const sp = spent[g] = r2(sumKind(s.log, 'out', e => !e.bill && e.group === g && inRange(e, P.start, P.end)));
       projected += Math.max(gp[g], sp);
       flexPlan += gp[g]; flexSpent += sp; left += gp[g] - sp;
     });
-    const daysLeft = 7 - (d(todayDs).getUTCDay() + 6) % 7;
-    const target = plan(s).left;
-    const save = num(s.takeHome) - projected;
-    return { start, plan: gp, spent, left, flexPlan, flexSpent, billsWeekly, daysLeft, perDay: left / daysLeft, save, target, short: target - save };
+    const daysLeft = Math.max(1, daysBetween(todayDs, P.end));
+    const target = plan(s).left * f;
+    const save = num(s.takeHome) * f - projected;
+    return Object.assign({}, P, { plan: gp, spent, left, flexPlan, flexSpent, billsWeekly, bills: billsWeekly * f, daysLeft,
+      perDay: left / daysLeft, save, target, short: target - save });
+  }
+
+  /* ---------- recurring entries ---------- */
+  /* s.recurring = [{ id, name, amt, kind, group, bill?, every: 'week'|'fortnight'|'month', next: 'YYYY-MM-DD' }] */
+  const nextDate = (ds, every) => every === 'month' ? addMonths(ds, 1) : addDays(ds, every === 'fortnight' ? 14 : 7);
+  const dueRecurring = (s, todayDs) => (s.recurring || []).filter(r => r.next && r.next <= todayDs).sort((a, b) => a.next.localeCompare(b.next));
+
+  /* What the everyday account should hold just before (and after) the next pay lands:
+     balance now, minus recurring payments due before payday, minus the day-to-day money you still plan to spend. */
+  function paydayForecast(s, todayDs) {
+    const bal = balance(s); if (bal === null) return null;
+    const st = periodStatus(s, todayDs);
+    const pay = (s.recurring || []).filter(r => r.kind === 'in').sort((a, b) => a.next.localeCompare(b.next))[0];
+    let payday = pay ? pay.next : st.end;
+    if (payday < todayDs) payday = todayDs;
+    const days = daysBetween(todayDs, payday);
+    const bills = (s.recurring || []).filter(r => r.kind !== 'in' && r.next && r.next < payday).reduce((a, r) => a + num(r.amt), 0);
+    const flex = Math.max(0, Math.min(st.left, st.perDay * days));
+    const before = r2(bal - bills - flex);
+    return { payday, days, bal, bills: r2(bills), flex: r2(flex), before, payAmt: pay ? num(pay.amt) : 0, after: r2(before + (pay ? num(pay.amt) : 0)) };
+  }
+
+  /* ---------- one-line entry: "coke 3.50", "coke $3", "$12 lunch" ----------
+     sure = the number is clearly a price ($ or cents), so the entry can be added straight away.
+     A bare whole number ("fuel 98", "iphone 15") is only offered as the price, never added without a look. */
+  function parseLine(text) {
+    const t = String(text || '').trim();
+    let m = t.match(/^(.*[a-z].*?)\s+(\$?)\s*(\d{1,6}(?:[.,]\d{1,2})?)$/i);
+    if (m) return { name: m[1].trim(), amt: parseFloat(m[3].replace(',', '.')), sure: !!m[2] || /[.,]/.test(m[3]) };
+    m = t.match(/^\$\s*(\d{1,6}(?:[.,]\d{1,2})?)\s+(.*[a-z].*)$/i);
+    if (m) return { name: m[2].trim(), amt: parseFloat(m[1].replace(',', '.')), sure: true };
+    return { name: t, amt: null, sure: false };
+  }
+
+  /* ---------- habits and comparisons ---------- */
+  /* Days in a row with at least one entry, ending today (or yesterday, so the streak isn't lost before you log today). */
+  function streak(log, todayDs) {
+    const days = new Set((log || []).map(e => String(e.t).slice(0, 10)));
+    let n = 0, ds = days.has(todayDs) ? todayDs : addDays(todayDs, -1);
+    while (days.has(ds)) { n++; ds = addDays(ds, -1); }
+    return n;
+  }
+  /* How the last pay period went. */
+  function recap(s, todayDs) {
+    const cur = periodOf(s, todayDs), prev = periodOf(s, addDays(cur.start, -1)), f = prev.days / 7;
+    const inP = e => inRange(e, prev.start, prev.end), log = s.log || [];
+    if (!log.some(inP)) return null;
+    const gp = groupPlan(s, it => !it.bill);
+    const vs = GROUPS.filter(g => gp[g] > 0).map(g => ({ group: g, plan: gp[g] * f, spent: r2(sumKind(log, 'out', e => !e.bill && e.group === g && inP(e))) }))
+      .map(x => Object.assign(x, { diff: x.spent - x.plan }));
+    const worst = vs.slice().sort((a, b) => b.diff - a.diff)[0], best = vs.filter(x => x.spent > 0).sort((a, b) => a.diff - b.diff)[0]; // only categories you actually spent in
+    const flex = r2(sumKind(log, 'out', e => !e.bill && inP(e))), flexPlan = vs.reduce((a, x) => a + x.plan, 0);
+    return { start: prev.start, end: prev.end, every: prev.every, out: r2(sumKind(log, 'out', inP)), flex, flexPlan,
+      inn: r2(sumKind(log, 'in', inP)), saved: r2(sumKind(log, 'save', inP)), target: plan(s).left * f,
+      worst: worst && worst.diff > 1 ? worst : null, best: best && best.diff < -1 ? best : null,
+      daysLogged: new Set(log.filter(inP).map(e => String(e.t).slice(0, 10))).size, days: prev.days };
+  }
+  /* This month so far against last month up to the same day. */
+  function monthCompare(s, todayDs) {
+    const ym = todayDs.slice(0, 7), dom = +todayDs.slice(8), pm = addMonths(ym + '-01', -1).slice(0, 7);
+    const log = (s.log || []).filter(e => (e.kind || 'out') === 'out');
+    const now = g => r2(sumKind(log, 'out', e => e.group === g && String(e.t).slice(0, 7) === ym && String(e.t).slice(0, 10) <= todayDs));
+    const then = g => r2(sumKind(log, 'out', e => e.group === g && String(e.t).slice(0, 7) === pm && +String(e.t).slice(8, 10) <= dom));
+    const rows = GROUPS.map(g => ({ group: g, now: now(g), prev: then(g) })).filter(r => r.now || r.prev);
+    return { ym, pm, dom, rows, now: r2(rows.reduce((a, r) => a + r.now, 0)), prev: r2(rows.reduce((a, r) => a + r.prev, 0)),
+      hasPrev: log.some(e => String(e.t).slice(0, 7) === pm) };
   }
 
   /* For each bill: what's been paid in its current period (this week, this calendar month, or the last 12 months). */
   function billStatus(s, todayDs) {
-    const ws = weekStart(todayDs), ym = todayDs.slice(0, 7);
+    const ws = weekStart(todayDs, periodStartDow(s)), ym = todayDs.slice(0, 7);
     return s.items.filter(it => it.bill).map(it => {
       const k = norm(it.name);
       const mine = e => (e.kind || 'out') === 'out' && norm(e.bill) === k;
@@ -280,7 +369,7 @@
     const inTotal = r2(sumKind(log, 'in', inWin)), savedTotal = r2(sumKind(log, 'save', inWin));
 
     // Day-to-day spending per week, last 8 weeks (bills left out: they are spread evenly)
-    const ws0 = weekStart(todayDs);
+    const ws0 = weekStart(todayDs, periodStartDow(s));
     const weekBars = [];
     for (let i = 7; i >= 0; i--) {
       const ws = addDays(ws0, -7 * i), we = addDays(ws, 7);
@@ -342,7 +431,8 @@
   }
 
   const Core = { GROUPS, PER, MON, d, iso, weekly, plan, trip, simulate, combined, target, readyIndex, spare, pay, weeklyPay, monLabel,
-    norm, guessGroup, addDays, weekStart, rowIndexFor, addToTracker, groupPlan, weekStatus, favourites,
+    norm, guessGroup, addDays, addMonths, daysBetween, weekStart, rowIndexFor, addToTracker, groupPlan, periodOf, periodStartDow, periodStatus, favourites,
+    nextDate, dueRecurring, paydayForecast, parseLine, streak, recap, monthCompare,
     endOf, endLabel, afterLabel, guessKind, guessGoal, defaultGoals, sumKind, goalInfo, balance, billStatus, matchBill, billPaidIn, insights, saveShares };
   if (typeof module === 'object' && module.exports) module.exports = Core; else root.Core = Core;
 })(this);

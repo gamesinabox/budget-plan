@@ -29,6 +29,8 @@ function merge(base, saved) {
   if (!Array.isArray(base.goals) || !base.goals.length) base.goals = Core.defaultGoals(base);
   // Data saved before bills existed: guess which items are bills.
   if (!base.items.some(i => 'bill' in i)) base.items.forEach(i => { i.bill = i.group === 'Rent' || i.group === 'Phone & wifi' || /insurance|rego|servic/i.test(i.name); });
+  if (!base.period || !base.period.anchor) base.period = { every: 'week', anchor: Core.weekStart(todayDs()) };
+  if (!Array.isArray(base.recurring)) base.recurring = [];
   return base;
 }
 function load() {
@@ -91,14 +93,20 @@ function setKind(k) {
   qn.closest('.qname').hidden = kind === 'save' && kindPicked;
   $('quick').dataset.kind = kind;
 }
+/* One-line entry: "coke 3.50" fills the price as you type. qa.dataset.auto marks a price that came from the text,
+   so it is cleared again if the text changes and never overrides a price you typed yourself. */
 function syncGuess() {
-  const has = qn.value.trim() !== '';
-  if (!kindPicked) setKind(has ? Core.guessKind(qn.value, S.learnedKind) : 'out');
-  if (!picked && kind === 'out') qg.value = guessOut(qn.value);
+  const pl = Core.parseLine(qn.value), name = pl.amt !== null ? pl.name : qn.value, has = name.trim() !== '';
+  if (pl.amt !== null && pl.sure && (!qa.value || qa.dataset.auto)) { qa.value = pl.amt; qa.dataset.auto = '1'; }
+  else if (qa.dataset.auto && !(pl.amt !== null && pl.sure)) { qa.value = ''; delete qa.dataset.auto; }
+  if (!kindPicked) setKind(has ? Core.guessKind(name, S.learnedKind) : 'out');
+  if (!picked && kind === 'out') qg.value = guessOut(name);
   paintDot();
-  $('q-hint').textContent = kind === 'save' ? 'Goes into your savings and is shared across your goals.' : !has ? 'Type what it was and I\'ll sort it. Tap to change.'
+  $('q-hint').textContent = kind === 'save' ? 'Goes into your savings and is shared across your goals.' : !has ? 'Tip: type it all in one go, like "coke 3.50", and press Enter.'
     : kind === 'in' ? 'Money in. Logged as income.' : picked ? 'Your pick. I\'ll remember it for next time.' : 'Guessed. Tap to change it.';
 }
+const entryName = () => { const pl = Core.parseLine(qn.value); return pl.amt !== null && qa.dataset.auto ? pl.name : qn.value.trim(); };
+qa.addEventListener('input', () => { delete qa.dataset.auto; });
 document.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => {
   kindPicked = true; setKind(b.dataset.kind); syncGuess();
   (kind === 'save' ? qa : qn).focus();
@@ -108,16 +116,24 @@ function lastPrice(name) {
   for (let i = S.log.length - 1; i >= 0; i--) if (Core.norm(S.log[i].name) === k) return S.log[i].amt;
 }
 qn.addEventListener('input', syncGuess);
-qn.addEventListener('change', () => { const p = lastPrice(qn.value); if (p && !qa.value) qa.value = p; });
-qn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const p = lastPrice(qn.value); if (p && !qa.value) qa.value = p; qa.focus(); qa.select(); } });
+qn.addEventListener('change', () => { const p = lastPrice(entryName()); if (p && !qa.value) qa.value = p; });
+qn.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const pl = Core.parseLine(qn.value);
+  if (pl.amt !== null && pl.sure && qa.dataset.auto) { $('quick').requestSubmit(); return; } // "coke 3.50" + Enter: done
+  if (pl.amt !== null && !qa.value) { qa.value = pl.amt; qa.dataset.auto = '1'; }           // "fuel 98": offer it, you confirm
+  const p = lastPrice(entryName()); if (p && !qa.value) qa.value = p;
+  qa.focus(); qa.select();
+});
 qg.addEventListener('change', () => { picked = true; syncGuess(); });
 $('quick').addEventListener('submit', e => {
   e.preventDefault();
-  const name = qn.value.trim() || (kind === 'save' ? 'Savings' : ''), amt = Math.round(parseFloat(qa.value) * 100) / 100;
+  const name = entryName() || (kind === 'save' ? 'Savings' : ''), amt = Math.round(parseFloat(qa.value) * 100) / 100;
   if (!name) { qn.focus(); return; }
   if (!(amt > 0)) { qa.focus(); qa.classList.add('shake'); setTimeout(() => qa.classList.remove('shake'), 400); return; }
   logItem(name, amt, kind, kind === 'in' ? 'Income' : kind === 'save' ? 'Savings' : qg.value);
-  qn.value = ''; qa.value = ''; picked = false; kindPicked = false; syncGuess(); qn.focus();
+  qn.value = ''; qa.value = ''; delete qa.dataset.auto; picked = false; kindPicked = false; syncGuess(); qn.focus();
 });
 $('q-favs').addEventListener('click', e => {
   const b = e.target.closest('[data-fav]'); if (!b) return;
@@ -129,12 +145,16 @@ document.addEventListener('keydown', e => {
 });
 
 // Only spending ('out') feeds the weekly tracker; money in and savings transfers don't.
-const track = (e, sign) => { if ((e.kind || 'out') === 'out') Core.addToTracker(S.tracker, e.t.slice(0, 10), e.group, sign * e.amt); };
-// val is a category, "bill:<item>" for spending, a goal id for savings, or 'Income'.
-function logItem(name, amt, kind, val) {
-  const day = qd.value && qd.value <= todayDs() ? qd.value : todayDs();
-  const e = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: day + nowStamp().slice(10), name, amt, kind, group: val };
+const track = (e, sign) => { if ((e.kind || 'out') === 'out') Core.addToTracker(S.tracker, e.t.slice(0, 10), e.group, sign * e.amt, Core.periodStartDow(S)); };
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const PN = { week: 'week', fortnight: 'fortnight', month: 'month' };
+let askedPersist = false;
+// val is a category, "bill:<item>" for spending, 'Savings', or 'Income'. day overrides the date chip (for repeating entries).
+function logItem(name, amt, kind, val, day) {
+  day = day || (qd.value && qd.value <= todayDs() ? qd.value : todayDs());
+  const e = { id: newId(), t: day + nowStamp().slice(10), name, amt, kind, group: val };
   if (kind === 'out') { const p = parseOut(val); e.group = p.group; if (p.bill) e.bill = p.bill; }
+  const before = Core.periodStatus(S, todayDs());
   S.log.push(e);
   S.log.sort((a, b) => a.t.localeCompare(b.t)); // a back-dated entry goes in its place
   const n = Core.norm(name);
@@ -143,9 +163,19 @@ function logItem(name, amt, kind, val) {
   track(e, 1);
   resetDate();
   buildTracker(); update();
+  // Ask the browser not to clear our storage when space runs low (Chrome/Android honour this).
+  if (!askedPersist && navigator.storage && navigator.storage.persist) { askedPersist = true; navigator.storage.persist().catch(() => {}); }
+  // Warn the moment a category goes over its plan for this pay period.
+  let warn = '';
+  if (kind === 'out' && !e.bill && day >= before.start) {
+    const now = Core.periodStatus(S, todayDs()), g = e.group, over = now.spent[g] - now.plan[g];
+    if (over > 0.5) warn = before.spent[g] <= before.plan[g] + 0.5
+      ? ` That takes ${g} ${money(over)} over plan this ${PN[now.every]}.` : ` ${g} is now ${money(over)} over plan this ${PN[now.every]}.`;
+  }
   const when = day === todayDs() ? '' : ` on ${dayName(day)}`;
   toast((kind === 'in' ? `Added ${name}, +${money2(amt)} in` : kind === 'save' ? `Saved ${money2(amt)}`
-    : `Added ${name}, ${money2(amt)} to ${e.bill ? e.bill + ' (bill)' : e.group}`) + when, () => removeEntry(e.id));
+    : `Added ${name}, ${money2(amt)} to ${e.bill ? e.bill + ' (bill)' : e.group}`) + when + (warn ? '.' + warn : ''), () => removeEntry(e.id), warn ? 'warn' : '');
+  return e;
 }
 function removeEntry(id) {
   const i = S.log.findIndex(x => x.id === id); if (i < 0) return;
@@ -153,19 +183,11 @@ function removeEntry(id) {
   S.log.splice(i, 1);
   buildTracker(); update();
 }
-function regroup(id, v) {
-  const e = S.log.find(x => x.id === id); if (!e) return;
-  track(e, -1);
-  if ((e.kind || 'out') === 'out') { const p = parseOut(v); e.group = p.group; if (p.bill) e.bill = p.bill; else delete e.bill; }
-  else e.group = v;
-  track(e, 1);
-  S.learned[Core.norm(e.name)] = v;
-  buildTracker(); update();
-}
-function toast(msg, undo) {
+function toast(msg, undo, cls) {
   $('toast-msg').textContent = msg; undoFn = undo;
-  $('toast').classList.add('on');
-  clearTimeout(toastT); toastT = setTimeout(() => { $('toast').classList.remove('on'); undoFn = null; }, 5000);
+  $('toast-undo').hidden = !undo;
+  $('toast').className = 'toast on ' + (cls || '');
+  clearTimeout(toastT); toastT = setTimeout(() => { $('toast').classList.remove('on'); undoFn = null; }, cls === 'warn' ? 7000 : 5000);
 }
 $('toast-undo').onclick = () => { if (undoFn) undoFn(); undoFn = null; $('toast').classList.remove('on'); qn.focus(); };
 
@@ -188,7 +210,9 @@ const IC = {
   x: '<path d="M7 7l10 10M17 7 7 17"/>',
   cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
   bulb: '<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2v.2h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
-  trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'
+  trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
+  flame: '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6.1 0-3.4 2.4-5.3 3.6-7.9.4 1.8 1.4 2.9 2.4 3.4C11.9 7.2 13 4.6 15.5 3c-.3 3 3 5.4 3 9.9 0 4.6-2.7 8.1-6.5 8.1z"/>'
 };
 const icon = k => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[k] || IC.Buffer}</svg>`;
 const gcol = g => `var(--g${GROUPS.indexOf(g)})`;
@@ -208,26 +232,27 @@ const row = (ic, name, right, sub) => `<div class="ri">${ic}<div class="ri-main"
 const bar = (pct, col, cls) => `<div class="bar" aria-hidden="true"><span class="${cls || ''}" style="width:${Math.max(0, Math.min(100, pct))}%;background:${col}"></span></div>`;
 
 function renderWeek() {
-  const ds = todayDs(), w = Core.weekStatus(S, ds), start = w.start;
-  $('w-range').textContent = 'this week';
+  const ds = todayDs(), w = Core.periodStatus(S, ds), start = w.start, pn = PN[w.every];
+  document.querySelectorAll('.pname').forEach(el => { el.textContent = 'this ' + pn; });
+  $('w-range').textContent = 'this ' + pn;
   const L = $('w-left'); L.textContent = money(w.left); L.classList.toggle('neg', w.left < 0);
-  $('w-perday').textContent = w.left > 0 ? `About ${money(w.perDay)} a day for ${w.daysLeft === 1 ? 'today' : `the ${w.daysLeft} days left`}` : `${money(-w.left)} over. Ease off until Monday.`;
+  $('w-perday').textContent = w.left > 0 ? `About ${money(w.perDay)} a day for ${w.daysLeft === 1 ? 'today' : `the ${w.daysLeft} days to payday`}` : `${money(-w.left)} over. Ease off until payday.`;
   const ratio = w.flexPlan ? w.flexSpent / w.flexPlan : 0;
   const ring = $('w-ring');
   ring.setAttribute('stroke-dasharray', `${Math.min(100, ratio * 100).toFixed(1)} 100`);
   ring.classList.toggle('warn', ratio > 0.85 && ratio <= 1); ring.classList.toggle('over', ratio > 1);
   $('w-ring-t').textContent = Math.round(ratio * 100) + '%';
-  $('w-of').textContent = `${money2(w.flexSpent)} of ${money(w.flexPlan)} spent · ${dayName(start)} to ${dayName(Core.addDays(start, 6))}`;
+  $('w-of').textContent = `${money2(w.flexSpent)} of ${money(w.flexPlan)} spent · ${dayName(start)} to ${dayName(Core.addDays(w.end, -1))}`;
   $('w-save').textContent = money(w.save);
   if (w.short <= 0.5) setPill($('w-pill'), 'good', '✓', 'On target');
   else setPill($('w-pill'), 'crit', '!', `${money(w.short)} short`);
-  $('w-save-note').textContent = `Target ${money(w.target)} a week. ${money(S.europeFund)} to Europe until the trip, the rest to the house.`;
-  const inWeek = e => e.t.slice(0, 10) >= start && e.t.slice(0, 10) < Core.addDays(start, 7);
-  const sv = Core.sumKind(S.log, 'save', inWeek);
-  $('m-in').textContent = '+' + money(Core.sumKind(S.log, 'in', inWeek));
-  $('m-out').textContent = money(Core.sumKind(S.log, 'out', inWeek));
+  $('w-save-note').textContent = `Target ${money(w.target)} this ${pn}. ${money(S.europeFund)} a week to Europe until the trip, the rest to the house.`;
+  const inP = e => e.t.slice(0, 10) >= start && e.t.slice(0, 10) < w.end;
+  const sv = Core.sumKind(S.log, 'save', inP);
+  $('m-in').textContent = '+' + money(Core.sumKind(S.log, 'in', inP));
+  $('m-out').textContent = money(Core.sumKind(S.log, 'out', inP));
   $('m-save').textContent = money(sv);
-  $('m-save-of').textContent = sv ? `${money2(sv)} moved to savings so far this week.` : 'Log a transfer as Saved when you move money to savings.';
+  $('m-save-of').textContent = sv ? `${money2(sv)} moved to savings so far this ${pn}.` : 'Log a transfer as Saved when you move money to savings.';
   const bal = Core.balance(S);
   $('m-bal').textContent = bal === null ? 'Set' : money2(bal);
   $('m-bal').classList.toggle('neg', bal !== null && bal < 0);
@@ -244,11 +269,89 @@ function renderWeek() {
       `<div class="ri-sub">${b.done ? `<span class="pill good"><i aria-hidden="true">✓</i>Paid ${PERIOD[b.per]}</span>`
         : b.paid ? `<span class="pill warn"><i aria-hidden="true">!</i>${money2(b.paid)} paid ${PERIOD[b.per]}</span>` : `<span class="muted">Not paid ${PERIOD[b.per]}</span>`}</div>`)).join('')
     : '<p class="empty">No bills yet. Tick "Bill" next to rent, insurance and the like in Plan → Budget.</p>';
+  renderForecast(); renderDue(); renderRecap(); renderBackupNag();
 }
 
-function renderLog() {
-  const list = S.log.slice(-60).reverse();
-  if (!list.length) { $('w-log').innerHTML = '<p class="empty">Nothing logged yet. Type your first purchase at the top, like <b>can of Coke</b> and <b>3.50</b>, then tap Add. Log your pay the same way: type <b>pay</b> and the amount.</p>'; return; }
+/* What you'll have when the next pay lands. */
+function renderForecast() {
+  const f = Core.paydayForecast(S, todayDs()), el = $('w-forecast');
+  if (!f) {
+    el.innerHTML = `${gi('cal', 'var(--s1)')}<div class="ri-main"><div class="lab">What you'll have on payday</div>
+      <div class="note">Tap <b>Account</b> at the top and enter your bank balance. I'll forecast what's left when your pay lands.</div></div>`;
+    return;
+  }
+  const when = f.payday === todayDs() ? 'today' : f.days === 1 ? 'tomorrow' : dayName(f.payday);
+  const parts = [`${money2(f.bal)} now`];
+  if (f.bills) parts.push(`− ${money(f.bills)} repeating payments`);
+  if (f.flex) parts.push(`− ${money(f.flex)} spending money left`);
+  el.innerHTML = `${gi('cal', 'var(--s1)')}<div class="ri-main"><div class="lab">Left in your account before pay (${when})</div>
+    <div class="bignum${f.before < 0 ? ' neg' : ''}">${money(f.before)}</div>
+    <div class="note">${parts.join(' ')}${f.payAmt ? `. About <b>${money(f.after)}</b> once pay lands.` : '.'}</div></div>`;
+}
+
+/* Repeating entries that are due: one tap to log (amount editable), or skip. */
+function renderDue() {
+  const today = todayDs(), due = Core.dueRecurring(S, today);
+  $('due').innerHTML = due.map(r => {
+    const g = r.kind === 'out' ? parseOut(r.group).group : r.group;
+    return `<div class="card duecard k-${esc(r.kind)}" data-rid="${esc(r.id)}">
+      <div class="duetop">${eIcon({ kind: r.kind, group: g })}<div class="ri-main"><div class="ri-name">${r.kind === 'in' ? 'Payday' : r.kind === 'save' ? 'Savings day' : 'Due'}: ${esc(r.name)}</div>
+        <div class="ri-sub">${r.next === today ? 'Today' : dayName(r.next)} · every ${esc(r.every)}</div></div></div>
+      <div class="duerow"><label class="dueamt"><span class="sr">Amount for ${esc(r.name)}</span><span aria-hidden="true">$</span><input type="number" step="0.01" min="0.01" inputmode="decimal" value="${r.amt}"></label>
+        <button type="button" class="btn" data-due-skip>Skip</button><button type="button" class="add" data-due-log>Log it</button></div></div>`;
+  }).join('');
+}
+$('due').addEventListener('click', e => {
+  const c = e.target.closest('[data-rid]'); if (!c) return;
+  const r = S.recurring.find(x => x.id === c.dataset.rid); if (!r) return;
+  const prev = r.next;
+  if (e.target.closest('[data-due-log]')) {
+    const amt = Math.round(parseFloat(c.querySelector('input').value) * 100) / 100;
+    if (!(amt > 0)) { c.querySelector('input').focus(); return; }
+    r.next = Core.nextDate(r.next, r.every);
+    const ent = logItem(r.name, amt, r.kind, r.kind === 'in' ? 'Income' : r.kind === 'save' ? 'Savings' : r.group, prev);
+    undoFn = () => { removeEntry(ent.id); r.next = prev; update(); };
+  } else if (e.target.closest('[data-due-skip]')) {
+    r.next = Core.nextDate(r.next, r.every); update();
+    toast(`Skipped ${r.name} for ${dayName(prev)}`, () => { r.next = prev; update(); });
+  }
+});
+
+/* How the last pay period went, for the first couple of days of a new one. */
+function renderRecap() {
+  const today = todayDs(), cur = Core.periodOf(S, today);
+  const rc = Core.daysBetween(cur.start, today) <= 2 ? Core.recap(S, today) : null;
+  if (!rc || S.recapSeen === rc.start) { $('recap').innerHTML = ''; return; }
+  const pn = PN[rc.every], under = rc.flexPlan - rc.flex;
+  const lines = [
+    `Day-to-day: <b>${money(rc.flex)}</b> of ${money(rc.flexPlan)} plan${under >= 0 ? `, ${money(under)} under` : `, ${money(-under)} over`}.`,
+    `Moved to savings: <b>${money(rc.saved)}</b> of ${money(rc.target)} target.`,
+    rc.best ? `Best: ${esc(rc.best.group)}, ${money(-rc.best.diff)} under plan.` : '',
+    rc.worst ? `Watch: ${esc(rc.worst.group)}, ${money(rc.worst.diff)} over plan.` : '',
+    `You logged on ${rc.daysLogged} of ${rc.days} days.`
+  ].filter(Boolean);
+  $('recap').innerHTML = `<div class="card recap"><div class="ghead"><h2>Last ${pn}: ${dayName(rc.start)} to ${dayName(Core.addDays(rc.end, -1))}</h2>
+    <button type="button" class="x" data-recap-ok aria-label="Dismiss">${icon('x')}</button></div>
+    <ul>${lines.map(l => `<li>${l}</li>`).join('')}</ul></div>`;
+}
+$('recap').addEventListener('click', e => { if (!e.target.closest('[data-recap-ok]')) return; S.recapSeen = Core.recap(S, todayDs()).start; update(); });
+
+/* Back-up nudge: once there is something to lose and the last backup is a week old. */
+function renderBackupNag() {
+  const days = S.lastBackup ? Core.daysBetween(S.lastBackup.slice(0, 10), todayDs()) : null;
+  const show = S.log.length >= 5 && (days === null || days >= 7) && S.nagSnooze !== todayDs();
+  $('bk-remind').innerHTML = show ? `<div class="card nag">${gi('save', 'var(--warn)')}<div class="ri-main"><div class="ri-name">Back up your data</div>
+    <div class="ri-sub">${days === null ? "You haven't saved a backup yet." : `Last backup was ${days} days ago.`} It only lives on this device.</div></div>
+    <button type="button" class="btn" data-bk-now>Back up</button><button type="button" class="x" data-bk-later aria-label="Remind me tomorrow">${icon('x')}</button></div>` : '';
+}
+$('bk-remind').addEventListener('click', e => {
+  if (e.target.closest('[data-bk-now]')) saveBackup();
+  else if (e.target.closest('[data-bk-later]')) { S.nagSnooze = todayDs(); update(); }
+});
+
+/* Entry rows (Home and History). Tap a row to edit it. */
+function entryRows(list, emptyHtml) {
+  if (!list.length) return emptyHtml;
   const today = todayDs(), yday = Core.addDays(today, -1);
   let html = '', day = '';
   list.forEach(e => {
@@ -259,14 +362,41 @@ function renderLog() {
       html += `<div class="lday"><span>${ds === today ? 'Today' : ds === yday ? 'Yesterday' : dayName(ds)}</span><span>${tot ? money2(tot) + ' spent' : ''}</span></div>`;
     }
     const k = e.kind || 'out';
-    const cat = k === 'in' ? '<span>Income</span>' : k === 'save' ? '<span>Savings account</span>'
-      : `<label class="lcat"><select aria-label="Category for ${esc(e.name)}" data-regroup>${outOpts(outVal(e))}</select></label>`;
-    html += `<div class="lrow k-${k}" data-id="${esc(e.id)}">${eIcon(e)}
-      <div class="ri-main"><div class="ri-top"><span class="ri-name">${esc(e.name)}</span><span class="lamt">${k === 'in' ? '+' : ''}${money2(e.amt)}</span></div>
-      <div class="ri-sub">${cat}<span class="ltime">${esc(e.t.slice(11, 16))}</span></div></div>
-      <button type="button" class="x" data-del aria-label="Delete ${esc(e.name)}">${icon('x')}</button></div>`;
+    const cat = k === 'in' ? 'Income' : k === 'save' ? 'Savings account' : e.bill ? `${esc(e.bill)} (bill)` : esc(e.group);
+    html += `<button type="button" class="lrow k-${k}" data-id="${esc(e.id)}" aria-label="Edit ${esc(e.name)}, ${money2(e.amt)}">${eIcon(e)}
+      <span class="ri-main"><span class="ri-top"><span class="ri-name">${esc(e.name)}</span><span class="lamt">${k === 'in' ? '+' : ''}${money2(e.amt)}</span></span>
+      <span class="ri-sub"><span>${cat}</span><span class="ltime">${esc(e.t.slice(11, 16))}</span></span></span></button>`;
   });
-  $('w-log').innerHTML = html;
+  return html;
+}
+function renderLog() {
+  $('w-log').innerHTML = entryRows(S.log.slice(-40).reverse(),
+    '<p class="empty">Nothing logged yet. Type your first purchase at the top, like <b>coke 3.50</b>, and press Enter. Log your pay the same way: <b>pay 1162</b>.</p>');
+}
+
+/* ----- history: search and filter everything ----- */
+let hKind = '';
+$('h-group').innerHTML = '<option value="">All categories</option>' + GROUPS.map(g => `<option>${esc(g)}</option>`).join('');
+document.querySelectorAll('[data-hk]').forEach(b => b.onclick = () => {
+  hKind = b.dataset.hk;
+  document.querySelectorAll('[data-hk]').forEach(x => x.setAttribute('aria-checked', String(x === b)));
+  renderHistory();
+});
+['h-q', 'h-group', 'h-month'].forEach(id => $(id).addEventListener('input', renderHistory));
+function renderHistory() {
+  const months = [...new Set(S.log.map(e => e.t.slice(0, 7)))].sort().reverse(), mSel = $('h-month'), mv = mSel.value;
+  mSel.innerHTML = '<option value="">All months</option>' + months.map(m => `<option value="${m}"${m === mv ? ' selected' : ''}>${Core.MON[+m.slice(5) - 1]} ${m.slice(0, 4)}</option>`).join('');
+  const q = Core.norm($('h-q').value), g = $('h-group').value, mo = mSel.value;
+  const list = S.log.filter(e => {
+    const k = e.kind || 'out';
+    return (!hKind || k === hKind) && (!g || (k === 'out' && e.group === g)) && (!mo || e.t.startsWith(mo))
+      && (!q || Core.norm(e.name).includes(q) || Core.norm(e.group).includes(q) || Core.norm(e.bill).includes(q));
+  }).reverse();
+  const out = Core.sumKind(list, 'out'), inn = Core.sumKind(list, 'in'), sv = Core.sumKind(list, 'save');
+  $('h-sum').innerHTML = list.length ? `<b>${list.length}</b> entr${list.length === 1 ? 'y' : 'ies'}` + (out ? ` · spent <b>${money2(out)}</b>` : '') + (inn ? ` · in <b>${money2(inn)}</b>` : '') + (sv ? ` · saved <b>${money2(sv)}</b>` : '') : '';
+  const shown = list.slice(0, 300); // shortcut: shows the newest 300 matches; add paging if history gets long enough to need it
+  $('h-list').innerHTML = entryRows(shown, `<p class="empty">${S.log.length ? 'Nothing matches. Try fewer words or clear a filter.' : 'Nothing logged yet.'}</p>`)
+    + (list.length > shown.length ? `<p class="empty">Showing the newest 300 of ${list.length}. Narrow it down with the filters.</p>` : '');
 }
 
 /* ----- insights ----- */
@@ -305,6 +435,17 @@ function renderInsights() {
       `<b>${money2(it.total)}</b>`, `<div class="ri-sub muted">${it.count} time${it.count > 1 ? 's' : ''}</div>`)).join('')
     : '<p class="empty">Nothing yet.</p>';
   drawWeeks(x.weekBars, x.flexPlan);
+
+  const mc = Core.monthCompare(S, todayDs()), lastM = Core.MON[+mc.pm.slice(5) - 1];
+  $('i-mc-sum').textContent = mc.rows.length ? `${money(mc.now)} vs ${money(mc.prev)}` : '';
+  $('i-mc').innerHTML = !mc.rows.length ? '<p class="empty">Log some spending to compare months.</p>'
+    : mc.rows.map(r => {
+      const diff = r.now - r.prev;
+      const sub = !mc.hasPrev ? `Nothing logged in ${lastM} to compare with yet.`
+        : diff > 1 ? `<span class="tag crit">+${money(diff)}</span> more than by ${mc.dom} ${lastM}`
+        : diff < -1 ? `<span class="tag good">−${money(-diff)}</span> less than by ${mc.dom} ${lastM}` : `About the same as by ${mc.dom} ${lastM}`;
+      return row(gi(r.group, gcol(r.group)), esc(r.group), `<b>${money(r.now)}</b><span class="muted"> vs ${money(r.prev)}</span>`, `<div class="ri-sub">${sub}</div>`);
+    }).join('');
 }
 
 /* Weekly bars: one series, a dashed plan line, tap or hover a bar for its total. */
@@ -398,12 +539,124 @@ function renderGoals() {
   });
 }
 
-$('w-log').addEventListener('change', e => { if (e.target.matches('[data-regroup]')) regroup(e.target.closest('[data-id]').dataset.id, e.target.value); });
-$('w-log').addEventListener('click', e => {
-  if (!e.target.closest('[data-del]')) return;
-  const id = e.target.closest('[data-id]').dataset.id, ent = S.log.find(x => x.id === id);
-  removeEntry(id);
-  if (ent) toast(`Deleted ${ent.name}`, () => { S.log.push(ent); S.log.sort((a, b) => a.t.localeCompare(b.t)); track(ent, 1); buildTracker(); update(); });
+/* ----- edit sheet ----- */
+let editId = null;
+const sheet = $('sheet');
+function openEdit(id) {
+  const e = S.log.find(x => x.id === id); if (!e) return;
+  editId = id;
+  $('e-name').value = e.name; $('e-amt').value = e.amt;
+  $('e-date').value = e.t.slice(0, 10); $('e-date').max = todayDs();
+  $('e-kind').value = e.kind || 'out';
+  fillEditCat(e);
+  sheet.showModal();
+}
+function fillEditCat(e) {
+  const k = $('e-kind').value;
+  $('e-cat-wrap').hidden = k !== 'out';
+  $('e-cat').innerHTML = outOpts(e && (e.kind || 'out') === 'out' ? outVal(e) : guessOut($('e-name').value));
+}
+$('e-kind').onchange = () => fillEditCat(null);
+sheet.addEventListener('click', e => { if (e.target === sheet) sheet.close(); }); // tap outside the sheet closes it
+$('sheet-form').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const e = S.log.find(x => x.id === editId); if (!e) { sheet.close(); return; }
+  const amt = Math.round(parseFloat($('e-amt').value) * 100) / 100;
+  if (!(amt > 0)) { $('e-amt').focus(); return; }
+  const k = $('e-kind').value, ds = $('e-date').value && $('e-date').value <= todayDs() ? $('e-date').value : e.t.slice(0, 10);
+  const before = Object.assign({}, e);
+  track(e, -1);
+  e.name = $('e-name').value.trim() || e.name; e.amt = amt; e.kind = k; e.t = ds + e.t.slice(10);
+  delete e.bill;
+  if (k === 'out') { const v = $('e-cat').value, p = parseOut(v); e.group = p.group; if (p.bill) e.bill = p.bill; S.learned[Core.norm(e.name)] = v; }
+  else e.group = k === 'in' ? 'Income' : 'Savings';
+  S.learnedKind[Core.norm(e.name)] = k;
+  track(e, 1);
+  S.log.sort((a, b) => a.t.localeCompare(b.t));
+  sheet.close(); buildTracker(); update();
+  toast(`Updated ${e.name}`, () => { track(e, -1); Object.keys(e).forEach(x => delete e[x]); Object.assign(e, before); track(e, 1); S.log.sort((a, b) => a.t.localeCompare(b.t)); buildTracker(); update(); });
+});
+$('e-del').onclick = () => {
+  const ent = S.log.find(x => x.id === editId); if (!ent) return;
+  sheet.close(); removeEntry(editId);
+  toast(`Deleted ${ent.name}`, () => { S.log.push(ent); S.log.sort((a, b) => a.t.localeCompare(b.t)); track(ent, 1); buildTracker(); update(); });
+};
+$('e-repeat').onclick = () => {
+  const e = S.log.find(x => x.id === editId); if (!e) return;
+  let next = Core.nextDate(e.t.slice(0, 10), 'week');
+  while (next <= todayDs()) next = Core.nextDate(next, 'week');
+  const k = e.kind || 'out';
+  const r = { id: newId(), name: e.name, amt: e.amt, kind: k, group: k === 'out' ? outVal(e) : k === 'in' ? 'Income' : 'Savings', every: 'week', next };
+  S.recurring.push(r);
+  sheet.close(); buildRecurring(); update();
+  toast(`${e.name} now repeats every week, next ${dayName(next)}. Change it in Plan → Settings.`, () => { S.recurring = S.recurring.filter(x => x !== r); buildRecurring(); update(); });
+};
+['w-log', 'h-list'].forEach(id => $(id).addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (b) openEdit(b.dataset.id); }));
+
+/* ----- settings: repeating entries ----- */
+const KINDS = [['in', 'Got paid'], ['out', 'Spent'], ['save', 'Saved']];
+function buildRecurring() {
+  $('rec-list').innerHTML = S.recurring.length ? S.recurring.map((r, i) => `<div class="card pad recrow" data-ri="${i}">
+    <div class="grid2"><label class="f">Name<input data-rk="name" value="${esc(r.name)}" placeholder="e.g. pay, rent"></label>
+      <label class="f">Amount ($)<input data-rk="amt" type="number" step="0.01" min="0" inputmode="decimal" value="${r.amt}"></label></div>
+    <div class="grid3"><label class="f">Type<select data-rk="kind">${KINDS.map(([v, l]) => `<option value="${v}"${r.kind === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f">Every<select data-rk="every">${['week', 'fortnight', 'month'].map(v => `<option${r.every === v ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="f">Next due<input data-rk="next" type="date" value="${esc(r.next)}"></label></div>
+    ${r.kind === 'out' ? `<label class="f">Category<select data-rk="group">${outOpts(r.group)}</select></label>` : ''}
+    <div class="rowend"><button type="button" class="ghost" data-rdel>Remove</button></div></div>`).join('')
+    : '<p class="note">None yet. Add your pay, then rent and any other regulars.</p>';
+}
+$('rec-list').addEventListener('change', e => {
+  const k = e.target.dataset.rk; if (!k) return;
+  const r = S.recurring[+e.target.closest('[data-ri]').dataset.ri];
+  r[k] = k === 'amt' ? (Math.round((parseFloat(e.target.value) || 0) * 100) / 100) : e.target.value;
+  if (k === 'kind') { r.group = r.kind === 'in' ? 'Income' : r.kind === 'save' ? 'Savings' : guessOut(r.name); buildRecurring(); }
+  if (k === 'name' && r.kind === 'out') { r.group = guessOut(r.name); buildRecurring(); }
+  update();
+});
+$('rec-list').addEventListener('click', e => {
+  if (!e.target.closest('[data-rdel]')) return;
+  const i = +e.target.closest('[data-ri]').dataset.ri, r = S.recurring[i];
+  S.recurring.splice(i, 1); buildRecurring(); update();
+  toast(`Removed ${r.name || 'repeating entry'}`, () => { S.recurring.splice(i, 0, r); buildRecurring(); update(); });
+});
+$('add-rec').onclick = () => {
+  S.recurring.push({ id: newId(), name: '', amt: 0, kind: 'out', group: 'Buffer', every: 'week', next: Core.addDays(todayDs(), 1) });
+  buildRecurring(); update();
+  const last = $('rec-list').lastElementChild.querySelector('input'); if (last) last.focus();
+};
+
+/* ----- settings: backup ----- */
+async function saveBackup() {
+  const name = `budget-backup-${todayDs()}.json`;
+  const done = how => { S.lastBackup = nowStamp(); update(); $('bk-msg2').textContent = how; toast('Backup saved'); };
+  S.lastBackup = nowStamp();
+  const file = new File([JSON.stringify(S)], name, { type: 'application/json' });
+  // On a phone, the share sheet lets you save to Files / iCloud / Drive or email it; elsewhere, download it.
+  if (matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'Budget backup' }); done(`Saved ${name}.`); return; }
+    catch (err) { if (err.name === 'AbortError') { $('bk-msg2').textContent = 'Backup cancelled.'; return; } }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  done(`Downloaded ${name}. Keep it somewhere safe, like iCloud Drive or Google Drive.`);
+}
+$('bk-save').onclick = saveBackup;
+$('bk-file').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const obj = JSON.parse(await f.text());
+    if (!obj || !Array.isArray(obj.items) || !('takeHome' in obj)) throw new Error('not a backup');
+    const prev = S;
+    S = merge(clone(DEFAULTS), obj); init();
+    $('bk-msg2').textContent = `Restored ${f.name}: ${S.log.length} entries.`;
+    toast('Backup restored', () => { S = prev; init(); $('bk-msg2').textContent = 'Restore undone.'; });
+  } catch (err) {
+    $('bk-msg2').textContent = "That file isn't a budget backup. Pick the .json file you saved from this app.";
+  }
 });
 
 /* ----- builders for the editable lists ----- */
@@ -530,7 +783,12 @@ function update() {
   const sel = Core.trip(S, S.scenario);
   const endL = Core.endLabel(S), notBy = 'Not by ' + endL;
   const spare = ri => { if (ri < 0) return ['crit', '!', notBy]; const n = Core.spare(rows[ri], S); return n >= 6 ? ['good', '✓', `${n} months to spare before ${Core.afterLabel(S)}`] : ['warn', '!', `Tight: ${n} month${n === 1 ? '' : 's'} to spare`]; };
-  $('today-line').textContent = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
+  const st = Core.streak(S.log, todayDs());
+  $('today-line').innerHTML = esc(new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }))
+    + (st >= 2 ? ` <span class="streak" title="Days in a row you've logged something">${icon('flame')}${st}-day streak</span>` : '');
+  const nextPay = Core.periodOf(S, todayDs()).end;
+  $('per-note').textContent = `Your budget runs ${PN[S.period.every] === 'month' ? 'monthly' : PN[S.period.every] + 'ly'} from ${dayName(Core.periodOf(S, todayDs()).start)}. Next one starts ${dayName(nextPay)}.`;
+  $('bk-last').innerHTML = S.lastBackup ? `Last backup: <b>${dayName(S.lastBackup.slice(0, 10))} ${S.lastBackup.slice(0, 4)}</b>` : "<b>No backup saved yet.</b>";
 
   /* budget tab */
   document.querySelectorAll('#items tr').forEach((tr, i) => { tr.querySelector('[data-w]').textContent = money2(Core.weekly(S.items[i])); });
@@ -597,19 +855,20 @@ function update() {
   else setPill($('s-eur-pill'), 'warn', '!', 'Check the dates');
 
   /* this week + quick log */
-  renderWeek(); renderLog(); renderQuick(); renderGoals(); renderInsights();
+  renderWeek(); renderLog(); renderQuick(); renderGoals(); renderInsights(); renderHistory();
   if (kind === 'out') { const v = qg.value; qg.innerHTML = outOpts(v); } // bills renamed or added
   save();
 }
 
 /* ----- tabs ----- */
-const PLAN = ['budget', 'europe', 'timeline', 'tracker'], TABS = ['week', 'insights', 'goals'].concat(PLAN);
+const PLAN = ['budget', 'europe', 'timeline', 'tracker', 'settings'], TABS = ['week', 'history', 'insights', 'goals'].concat(PLAN);
+const navOf = n => PLAN.includes(n) ? 'plan' : n === 'history' ? 'week' : n; // History lives under Home
 function showTab(name) {
   if (!TABS.includes(name)) name = 'week';
   TABS.forEach(t => { $('p-' + t).hidden = t !== name; });
   $('plan-head').hidden = !PLAN.includes(name);
   document.querySelectorAll('[data-tab]').forEach(b => {
-    const on = b.dataset.nav === 'plan' ? PLAN.includes(name) : b.dataset.tab === name;
+    const on = b.hasAttribute('data-nav') ? (b.dataset.nav === 'plan' ? 'plan' : b.dataset.tab) === navOf(name) : b.dataset.tab === name;
     b.classList.toggle('on', on);
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
@@ -644,6 +903,8 @@ let rt; $('reset').onclick = () => {
   clearTimeout(rt); rt = null; b.textContent = 'Reset to the starting plan'; S = merge(clone(DEFAULTS), {}); init(); $('bk-msg').textContent = 'Reset to the starting plan.';
 };
 
-function init() { buildBudget(); buildItin(); buildScenarios(); buildResults(); buildTracker(); buildGoals(); update(); syncGuess(); }
+function init() { buildBudget(); buildItin(); buildScenarios(); buildResults(); buildTracker(); buildGoals(); buildRecurring(); update(); syncGuess(); }
 init(); showTab(location.hash.slice(1));
+// Offline support and home-screen install (needs http(s); skipped when opened as a file).
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

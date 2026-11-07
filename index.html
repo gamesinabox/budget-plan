@@ -8,7 +8,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Budget">
 <title>Weekly Budget</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='white' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -26,6 +30,10 @@
       <p class="note">From here on it moves with everything you log.</p>
     </form>
 
+    <div id="due" class="stack"></div>
+    <div id="recap"></div>
+    <div id="bk-remind"></div>
+
     <!-- QUICK ADD: the thing you open the page for -->
     <form class="card quick" id="quick" autocomplete="off" novalidate>
       <h2 class="sr">Log money in or out</h2>
@@ -35,7 +43,7 @@
         <button type="button" role="radio" data-kind="save" aria-checked="false">Saved</button>
       </div>
       <label class="qname"><span class="sr" id="q-name-lab">What did you buy?</span>
-        <input id="q-name" placeholder="What did you buy?" list="q-names" enterkeyhint="next" autofocus></label>
+        <input id="q-name" placeholder="What did you buy?" list="q-names" enterkeyhint="next" autocomplete="off" autofocus></label>
       <div class="qrow">
         <label class="qamt"><span class="sr">Amount in dollars</span>
           <span class="dollar" aria-hidden="true">$</span>
@@ -73,7 +81,7 @@
 
     <div class="card savecard">
       <div>
-        <div class="lab">On track to save this week</div>
+        <div class="lab">On track to save <span class="pname">this week</span></div>
         <div class="bignum" id="w-save">-</div>
         <div class="note" id="w-save-note"></div>
         <div class="note" id="m-save-of"></div>
@@ -81,15 +89,35 @@
       <span class="pill" id="w-pill"></span>
     </div>
 
-    <div class="sechead"><h2>This week by category</h2></div>
+    <div class="card forecast" id="w-forecast"></div>
+
+    <div class="sechead"><h2>By category, <span class="pname">this week</span></h2></div>
     <div class="card list" id="w-groups"></div>
 
     <div class="sechead"><h2>Bills</h2><span class="muted" id="w-bills-sum"></span></div>
     <div class="card list" id="w-bills"></div>
-    <p class="note">Bills count at their weekly share every week, whenever you pay them. Day-to-day spending you haven't logged yet counts at its full plan.</p>
+    <p class="note">Bills count at their share every pay period, whenever you pay them. Day-to-day spending you haven't logged yet counts at its full plan.</p>
 
-    <div class="sechead"><h2>Recent activity</h2></div>
+    <div class="sechead"><h2>Recent activity</h2><button type="button" class="linkbtn" data-tab="history">Search all</button></div>
     <div class="card list log" id="w-log"></div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="p-history" aria-label="History" hidden>
+    <header class="apphead"><div><p class="eyebrow">Every entry, searchable</p><h1>History</h1></div></header>
+    <label class="search"><span class="sr">Search entries</span><span data-icon="search"></span><input id="h-q" type="search" placeholder="Search, e.g. coffee or Thai" autocomplete="off"></label>
+    <div class="seg seg4" role="radiogroup" aria-label="Type" id="h-kind">
+      <button type="button" role="radio" data-hk="" aria-checked="true">All</button>
+      <button type="button" role="radio" data-hk="out" aria-checked="false">Spent</button>
+      <button type="button" role="radio" data-hk="in" aria-checked="false">In</button>
+      <button type="button" role="radio" data-hk="save" aria-checked="false">Saved</button>
+    </div>
+    <div class="filters">
+      <label class="chipsel"><span class="sr">Category</span><select id="h-group"></select></label>
+      <label class="chipsel"><span class="sr">Month</span><select id="h-month"></select></label>
+    </div>
+    <p class="hsum" id="h-sum" aria-live="polite"></p>
+    <div class="card list log" id="h-list"></div>
   </section>
 
   <!-- INSIGHTS -->
@@ -118,6 +146,9 @@
       <details><summary>Show as a table</summary><div id="i-weeks-table"></div></details>
     </div>
 
+    <div class="sechead"><h2>This month vs last month</h2><span class="muted" id="i-mc-sum"></span></div>
+    <div class="card list" id="i-mc"></div>
+
     <div class="sechead"><h2>Biggest items</h2></div>
     <div class="card list" id="i-items"></div>
   </section>
@@ -132,7 +163,7 @@
 
   <!-- PLAN -->
   <div id="plan-head" hidden>
-    <header class="apphead"><div><p class="eyebrow">Budget, trip, house and history</p><h1>Plan</h1></div></header>
+    <header class="apphead"><div><p class="eyebrow">Budget, trip, house, history and settings</p><h1>Plan</h1></div></header>
     <div class="strip" aria-live="polite">
       <div class="tile"><div class="lab">Left to save each week</div><div class="val" id="s-left">-</div><div class="note" id="s-left-sub"></div></div>
       <div class="tile"><div class="lab">Apartment deposit ready</div><div class="val" id="s-ready">-</div><span class="pill" id="s-pill"></span></div>
@@ -143,6 +174,7 @@
       <button type="button" data-tab="europe">Europe</button>
       <button type="button" data-tab="timeline">House</button>
       <button type="button" data-tab="tracker">Tracker</button>
+      <button type="button" data-tab="settings">Settings</button>
     </nav>
   </div>
 
@@ -278,7 +310,35 @@
     <div class="row"><button class="btn" id="add-week" type="button">Add a week</button></div>
     <p id="trk-sum" class="big"></p>
 
-    <details><summary>Backup and reset</summary>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="p-settings" class="plansec" aria-label="settings" hidden>
+    <h2>Pay and budget period</h2>
+    <div class="card pad">
+      <div class="grid">
+        <label class="f" for="per-every">Budget runs
+          <select id="per-every" data-bind="period.every"><option value="week">Every week</option><option value="fortnight">Every fortnight</option><option value="month">Every month</option></select></label>
+        <label class="f" for="per-anchor">Starting on a payday<input id="per-anchor" type="date" data-bind="period.anchor"></label>
+      </div>
+      <p class="note" id="per-note"></p>
+    </div>
+
+    <h2>Repeating entries</h2>
+    <p class="note">Pay, rent and other regulars. On the day they're due, Home asks you to confirm with one tap.</p>
+    <div id="rec-list" class="stack"></div>
+    <div class="row"><button class="btn wide" id="add-rec" type="button">+ Add a repeating entry</button></div>
+
+    <h2>Backup</h2>
+    <div class="card pad">
+      <p class="bkline" id="bk-last"></p>
+      <p class="note">Your data lives only on this device. Save a backup file now and then (to iCloud Drive, Google Drive or email it to yourself). To move to a new phone, restore the file there.</p>
+      <div class="row">
+        <button class="add" id="bk-save" type="button">Save backup file</button>
+        <label class="btn filebtn">Restore from file<input id="bk-file" type="file" accept="application/json,.json" hidden></label>
+      </div>
+      <p class="note" id="bk-msg2" aria-live="polite"></p>
+      <details><summary>Copy and paste your data, or start again</summary>
       <p class="note">Your numbers live in this browser only. To move them to another device, copy the text below, then paste it into the same box on the other device and press Load.</p>
       <textarea id="bk" aria-label="Backup data" spellcheck="false"></textarea>
       <div class="row">
@@ -288,6 +348,7 @@
       </div>
       <p class="note" id="bk-msg" aria-live="polite"></p>
     </details>
+    </div>
   </section>
 </div>
 
@@ -298,6 +359,25 @@
   <button type="button" data-tab="goals" data-nav><span data-icon="target"></span><span>Goals</span></button>
   <button type="button" data-tab="budget" data-nav="plan"><span data-icon="sliders"></span><span>Plan</span></button>
 </nav>
+
+<dialog id="sheet" class="sheet" aria-labelledby="sheet-title">
+  <form method="dialog" id="sheet-form" novalidate>
+    <div class="grab" aria-hidden="true"></div>
+    <h2 id="sheet-title">Edit entry</h2>
+    <label class="f">What<input id="e-name" autocomplete="off"></label>
+    <div class="grid2">
+      <label class="f">Amount ($)<input id="e-amt" type="number" step="0.01" min="0.01" inputmode="decimal"></label>
+      <label class="f">Date<input id="e-date" type="date"></label>
+    </div>
+    <label class="f" id="e-cat-wrap">Category<select id="e-cat"></select></label>
+    <label class="f">Type<select id="e-kind"><option value="out">Spent</option><option value="in">Got paid</option><option value="save">Saved</option></select></label>
+    <div class="sheet-actions">
+      <button type="button" class="btn danger" id="e-del">Delete</button>
+      <button type="button" class="btn" id="e-repeat">Repeat weekly</button>
+      <button type="submit" class="add" id="e-save" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-msg"></span><button type="button" id="toast-undo">Undo</button></div>
 

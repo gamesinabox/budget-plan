@@ -47,8 +47,8 @@ test('logging rolls into the tracker week and undoes cleanly', () => {
 
 test('week status', () => {
   const s = { takeHome: 1000, europeFund: 0, items: [{ amt: 300, per: 'week', group: 'Rent', bill: true }, { amt: 100, per: 'week', group: 'Groceries' }],
-    tracker: [{ date: '2026-11-02', v: { Groceries: 130 } }], log: [] };
-  const w = Core.weekStatus(s, '2026-11-07');
+    tracker: [], log: [{ t: '2026-11-03T10:00:00', name: 'Woolies', amt: 130, group: 'Groceries' }] };
+  const w = Core.periodStatus(s, '2026-11-07');
   assert.equal(w.left, -30);
   assert.equal(w.daysLeft, 2);
   assert.equal(w.save, 570); // rent assumed at plan, groceries at actual
@@ -104,11 +104,11 @@ test('a monthly bill counts at its weekly share, whichever week it is paid', () 
   assert.equal(Core.matchBill('phone bill', items), 'Phone & wifi');
   assert.equal(Core.matchBill('fuel', items), null); // not a bill
   const s = { takeHome: 1000, europeFund: 0, items, tracker: [], log: [] };
-  const quiet = Core.weekStatus(s, '2026-11-07');
+  const quiet = Core.periodStatus(s, '2026-11-07');
   const tr = s.tracker, add = (e) => { s.log.push(e); Core.addToTracker(tr, e.t.slice(0, 10), e.group, e.amt); };
   add({ t: '2026-11-03T09:00:00', name: 'car insurance', amt: 52, group: 'Car', bill: 'Car insurance' });
   add({ t: '2026-11-04T09:00:00', name: 'petrol', amt: 30, group: 'Car' });
-  const w = Core.weekStatus(s, '2026-11-07');
+  const w = Core.periodStatus(s, '2026-11-07');
   assert.equal(w.save, quiet.save); // paying the bill this week changes nothing; petrol is under the fuel plan
   assert.equal(w.spent.Car, 30);
   assert.equal(w.plan.Car, 40);
@@ -161,4 +161,67 @@ test('savings go into one pot, split across goals the way the plan splits them',
   const saved = s.goals.map(g => Math.round(Core.goalInfo(s, g, '2026-11-07').saved));
   assert.deepEqual(saved, [300, 100, 100]);
   assert.equal(Core.saveShares(s, '2027-07-01').europe, 0); // after the trip Europe gets nothing
+});
+
+test('pay periods run payday to payday', () => {
+  const tue = { period: { every: 'week', anchor: '2026-11-03' } }; // a Tuesday
+  assert.deepEqual(Core.periodOf(tue, '2026-11-07'), { every: 'week', start: '2026-11-03', end: '2026-11-10', days: 7 }); // Saturday
+  assert.equal(Core.periodOf(tue, '2026-11-10').start, '2026-11-10'); // payday starts a new one
+  assert.equal(Core.periodOf(tue, '2026-10-01').start, '2026-09-29'); // works before the anchor too
+  assert.equal(Core.periodOf({ period: { every: 'fortnight', anchor: '2026-11-03' } }, '2026-11-16').start, '2026-11-03');
+  const mon = { period: { every: 'month', anchor: '2026-01-31' } };
+  assert.deepEqual(Core.periodOf(mon, '2026-02-15'), { every: 'month', start: '2026-01-31', end: '2026-02-28', days: 28 });
+  assert.equal(Core.periodOf(mon, '2026-03-01').start, '2026-02-28');
+  assert.equal(Core.periodStartDow(tue), 1);
+  const tr = []; Core.addToTracker(tr, '2026-11-07', 'Car', 10, 1);
+  assert.equal(tr[0].date, '2026-11-03'); // tracker rows start on payday's weekday
+  // a fortnight budget is twice the weekly plan
+  const s = { takeHome: 1000, europeFund: 0, items: [{ amt: 100, per: 'week', group: 'Groceries' }], log: [], period: { every: 'fortnight', anchor: '2026-11-03' } };
+  const st = Core.periodStatus(s, '2026-11-07');
+  assert.equal(st.flexPlan, 200);
+  assert.equal(st.daysLeft, 10);
+  assert.equal(st.target, 1800);
+});
+
+test('recurring entries, payday forecast, one-line entry, streak, recap, month compare', () => {
+  assert.equal(Core.nextDate('2026-11-10', 'week'), '2026-11-17');
+  assert.equal(Core.nextDate('2026-01-31', 'month'), '2026-02-28');
+  const s = { takeHome: 1000, europeFund: 0, items: [{ amt: 140, per: 'week', group: 'Groceries' }], period: { every: 'week', anchor: '2026-11-03' },
+    recurring: [{ id: 'p', name: 'pay', amt: 1000, kind: 'in', next: '2026-11-10', every: 'week' }, { id: 'r', name: 'Rent', amt: 350, kind: 'out', group: 'Rent', next: '2026-11-09', every: 'week' }],
+    log: [{ t: '2026-11-04T09:00:00', name: 'Woolies', amt: 70, group: 'Groceries' }], bal: { amt: 900, at: '2026-11-07T00:00:00' } };
+  assert.deepEqual(Core.dueRecurring(s, '2026-11-08'), []);
+  assert.equal(Core.dueRecurring(s, '2026-11-09')[0].id, 'r');
+  const f = Core.paydayForecast(s, '2026-11-07');
+  // 900 now, rent 350 due Monday, 70 day-to-day left (3 days at 70/3 a day), pay 1000 on Tuesday
+  assert.equal(f.payday, '2026-11-10');
+  assert.equal(f.before, 480);
+  assert.equal(f.after, 1480);
+
+  assert.deepEqual(Core.parseLine('can of coke 3.50'), { name: 'can of coke', amt: 3.5, sure: true });
+  assert.deepEqual(Core.parseLine('lunch $12'), { name: 'lunch', amt: 12, sure: true });
+  assert.deepEqual(Core.parseLine('$12 lunch'), { name: 'lunch', amt: 12, sure: true });
+  assert.deepEqual(Core.parseLine('fuel 98'), { name: 'fuel', amt: 98, sure: false });
+  assert.deepEqual(Core.parseLine('7 eleven'), { name: '7 eleven', amt: null, sure: false });
+  assert.deepEqual(Core.parseLine('coke'), { name: 'coke', amt: null, sure: false });
+  assert.equal(Core.parseLine('3.50').amt, null); // needs a name
+
+  const log = ['2026-11-05', '2026-11-06', '2026-11-07', '2026-11-02'].map(ds => ({ t: ds + 'T10:00:00' }));
+  assert.equal(Core.streak(log, '2026-11-07'), 3);
+  assert.equal(Core.streak(log, '2026-11-08'), 3); // not logged yet today: streak still alive
+  assert.equal(Core.streak(log, '2026-11-09'), 0);
+
+  const r = { takeHome: 1000, europeFund: 0, items: [{ amt: 100, per: 'week', group: 'Groceries' }, { amt: 50, per: 'week', group: 'Eating out & social' }],
+    period: { every: 'week', anchor: '2026-11-03' },
+    log: [{ t: '2026-11-04T09:00:00', name: 'Woolies', amt: 80, group: 'Groceries' }, { t: '2026-11-05T09:00:00', name: 'pizza', amt: 70, group: 'Eating out & social' },
+      { t: '2026-11-11T09:00:00', name: 'coffee', amt: 5, group: 'Eating out & social' }] };
+  const rc = Core.recap(r, '2026-11-11');
+  assert.equal(rc.start, '2026-11-03');
+  assert.equal(rc.flex, 150);
+  assert.equal(rc.worst.group, 'Eating out & social');
+  assert.equal(rc.best.group, 'Groceries');
+  assert.equal(Core.recap(r, '2026-11-05'), null); // nothing in the period before
+
+  const mc = Core.monthCompare({ log: [{ t: '2026-10-03T09:00:00', amt: 40, group: 'Groceries' }, { t: '2026-10-20T09:00:00', amt: 99, group: 'Groceries' },
+    { t: '2026-11-02T09:00:00', amt: 60, group: 'Groceries' }] }, '2026-11-07');
+  assert.deepEqual(mc.rows, [{ group: 'Groceries', now: 60, prev: 40 }]); // 20 Oct is past "the same point" last month
 });

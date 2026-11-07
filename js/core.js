@@ -195,7 +195,18 @@
   ];
   const sumKind = (log, kind, pred) => (log || []).filter(e => (e.kind || 'out') === kind && (!pred || pred(e))).reduce((a, e) => a + num(e.amt), 0);
 
-  /* Target, deadline, weekly plan, saved so far (start + logged savings) and when it will be reached at the planned pace. */
+  /* Savings are logged into one pot. Each goal gets the share of it that the plan's weekly split gives it
+     (house fund / Europe fund until the trip / your own goals' weekly amounts).
+     shortcut: past savings are re-split by today's plan, so changing the split moves old money too; store per-entry splits if that matters. */
+  function saveShares(s, todayDs) {
+    const p = plan(s), pre = !s.depart || todayDs < s.depart;
+    const goals = s.goals || [];
+    const w = goals.map(g => Math.max(0, g.link === 'house' ? (pre ? p.housePre : p.housePost) : g.link === 'europe' ? (pre ? num(s.europeFund) : 0) : num(g.weekly)));
+    const tot = w.reduce((a, b) => a + b, 0);
+    return Object.fromEntries(goals.map((g, i) => [g.id, tot ? w[i] / tot : (g.link === 'house' ? 1 : 0)]));
+  }
+
+  /* Target, deadline, weekly plan, saved so far (start + its share of logged savings) and when it will be reached at the planned pace. */
   function goalInfo(s, g, todayDs) {
     const p = plan(s);
     let tgt, by, wk, eta = null;
@@ -204,7 +215,9 @@
       const rows = simulate(s, p), ri = readyIndex(rows, tgt); eta = ri < 0 ? null : monLabel(rows[ri]);
     } else if (g.link === 'europe') { tgt = trip(s, s.scenario).yours; by = s.depart; wk = num(s.europeFund); }
     else { tgt = num(g.target); by = g.by; wk = num(g.weekly); }
-    const saved = num(g.start) + sumKind(s.log, 'save', e => e.group === g.id);
+    const ids = new Set((s.goals || []).map(x => x.id));
+    const pooled = sumKind(s.log, 'save', e => !ids.has(e.group));
+    const saved = num(g.start) + sumKind(s.log, 'save', e => e.group === g.id) + pooled * (saveShares(s, todayDs)[g.id] || 0);
     const togo = Math.max(0, tgt - saved);
     const weeks = by ? (d(by) - d(todayDs)) / (7 * 864e5) : NaN;
     const need = weeks > 0 ? togo / weeks : (togo ? NaN : 0);
@@ -234,8 +247,102 @@
     return [...m.values()].sort((a, b) => b.count - a.count).slice(0, n || 6);
   }
 
+  /* ---------- insights: where it goes, your pace, predictions, tips ---------- */
+  const isOut = e => (e.kind || 'out') === 'out';
+  const HABIT_GROUPS = ['Eating out & social', 'Personal & health', 'Buffer'];
+  const fmt$ = n => '$' + Math.round(Math.abs(n)).toLocaleString('en-AU');
+  /* days = look-back window (null = all time). Predictions need at least 7 days of logging. */
+  function insights(s, todayDs, days) {
+    const log = (s.log || []).filter(e => String(e.t).slice(0, 10) <= todayDs);
+    const firstDs = log.length ? log.reduce((m, e) => (e.t < m ? e.t : m), log[0].t).slice(0, 10) : todayDs;
+    const since = Math.round((d(todayDs) - d(firstDs)) / 864e5) + 1;
+    const covered = log.length ? Math.min(days || Infinity, since) : 0;
+    const from = addDays(todayDs, -(covered - 1)), to = addDays(todayDs, 1);
+    const inWin = e => inRange(e, from, to);
+    const weeks = covered / 7, ready = covered >= 7;
+    const p = plan(s), gp = groupPlan(s, it => !it.bill);
+    const billsWeekly = s.items.filter(it => it.bill).reduce((a, it) => a + weekly(it), 0);
+    const flexPlan = GROUPS.reduce((a, g) => a + gp[g], 0);
+
+    // Where the money goes (everything spent, bills at what you actually paid)
+    const byGroup = GROUPS.map(g => ({ group: g, total: r2(sumKind(log, 'out', e => e.group === g && inWin(e))),
+      flex: r2(sumKind(log, 'out', e => e.group === g && !e.bill && inWin(e))) }));
+    const totalOut = r2(byGroup.reduce((a, x) => a + x.total, 0));
+    byGroup.forEach(x => { x.pct = totalOut ? x.total / totalOut : 0; });
+    const ranked = byGroup.filter(x => x.total > 0).sort((a, b) => b.total - a.total);
+    const items = new Map();
+    log.filter(e => isOut(e) && inWin(e)).forEach(e => {
+      const k = norm(e.name), it = items.get(k) || { name: e.name, total: 0, count: 0, group: e.group, bill: !!e.bill };
+      it.total = r2(it.total + num(e.amt)); it.count++; items.set(k, it);
+    });
+    const topItems = [...items.values()].sort((a, b) => b.total - a.total);
+    const flexTotal = r2(byGroup.reduce((a, x) => a + x.flex, 0));
+    const inTotal = r2(sumKind(log, 'in', inWin)), savedTotal = r2(sumKind(log, 'save', inWin));
+
+    // Day-to-day spending per week, last 8 weeks (bills left out: they are spread evenly)
+    const ws0 = weekStart(todayDs);
+    const weekBars = [];
+    for (let i = 7; i >= 0; i--) {
+      const ws = addDays(ws0, -7 * i), we = addDays(ws, 7);
+      weekBars.push({ start: ws, flex: r2(sumKind(log, 'out', e => !e.bill && inRange(e, ws, we))), current: i === 0 });
+    }
+
+    // Pace and predictions
+    const pace = ready ? flexTotal / weeks : NaN;
+    const delta = flexPlan - pace; // + means under plan
+    const saveAtPace = num(s.takeHome) - pace - billsWeekly;
+    const rowsPlan = simulate(s, p), tgt = target(s, s.depositPct);
+    const riPlan = readyIndex(rowsPlan, tgt);
+    let riPace = -1, rowsPace = rowsPlan;
+    if (ready) { rowsPace = simulate(s, Object.assign({}, p, { housePre: p.housePre + delta, housePost: p.housePost + delta })); riPace = readyIndex(rowsPace, tgt); }
+    const label = (rows, i) => i < 0 ? 'after ' + endLabel(s) : monLabel(rows[i]);
+    const ym = todayDs.slice(0, 7), dom = d(todayDs).getUTCDate();
+    const dim = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate();
+    const monthFlex = r2(sumKind(log, 'out', e => !e.bill && String(e.t).slice(0, 7) === ym));
+    const monthForecast = ready ? monthFlex + pace / 7 * (dim - dom) + billsWeekly * 52 / 12 : NaN;
+    const monthPlan = p.spend * 52 / 12;
+    const predictions = ready ? {
+      pace, flexPlan, saveAtPace, target: p.left, monthFlex, monthForecast, monthPlan,
+      readyPlan: label(rowsPlan, riPlan), readyPace: label(rowsPace, riPace),
+      monthsSooner: riPlan >= 0 && riPace >= 0 ? riPlan - riPace : null,
+      yearSaving: saveAtPace * 52
+    } : null;
+
+    // Tips, biggest yearly impact first
+    const tips = [];
+    if (ready) {
+      GROUPS.forEach(g => {
+        const gpace = byGroup.find(x => x.group === g).flex / weeks;
+        if (gpace > gp[g] + 5) tips.push({ kind: 'over', group: g, impact: (gpace - gp[g]) * 52,
+          text: `${g} is running at ${fmt$(gpace)} a week, ${fmt$(gpace - gp[g])} over plan. Getting back to plan saves about ${fmt$((gpace - gp[g]) * 52)} a year.` });
+      });
+      // Habits only for optional spending: "halve your groceries" isn't advice.
+      topItems.filter(it => !it.bill && it.count >= 3 && HABIT_GROUPS.includes(it.group)).slice(0, 3).forEach(it => {
+        const yr = it.total / weeks * 52;
+        if (yr >= 100) tips.push({ kind: 'habit', group: it.group, impact: yr / 2,
+          text: `${it.name}: ${it.count} times in ${Math.round(covered / 7)} week${covered >= 14 ? 's' : ''}, ${fmt$(it.total)} in all. That's about ${fmt$(yr)} a year; halving it saves ${fmt$(yr / 2)}.` });
+      });
+      if (delta > 5) tips.push({ kind: 'good', impact: delta * 52,
+        text: `You're spending ${fmt$(delta)} a week less than planned. Move that into the house fund each week` +
+          (predictions.monthsSooner > 0 ? ` and the deposit is ready ${predictions.readyPace} instead of ${predictions.readyPlan}.` : '.') });
+      // Money not spent but not moved either: it's sitting in the everyday account where it's easy to spend.
+      const savedWk = savedTotal / weeks, spare = Math.min(saveAtPace, p.left) - savedWk;
+      if (spare > 20) tips.push({ kind: 'save', impact: spare * 52,
+        text: `Your spending leaves about ${fmt$(saveAtPace)} a week spare, but you've moved ${fmt$(savedWk)} a week into savings. Move another ${fmt$(spare)} across on payday so it doesn't get spent.` });
+      const inWk = inTotal / weeks;
+      if (covered >= 14 && inWk < num(s.takeHome) * 0.9) tips.push({ kind: 'info', impact: 0,
+        text: `Money in averages ${fmt$(inWk)} a week, under the ${fmt$(s.takeHome)} take-home your plan uses. Update it on the Plan tab so the forecasts stay honest.` });
+    }
+    if (dom >= 20) billStatus(s, todayDs).filter(b => b.per === 'month' && !b.paid).forEach(b => tips.push({ kind: 'bill', group: b.group, impact: 0,
+      text: `${b.name} (${fmt$(b.amt)} a month) hasn't been logged this month.` }));
+    tips.sort((a, b) => b.impact - a.impact);
+
+    return { covered, ready, daysToReady: Math.max(0, 7 - covered), totalOut, flexTotal, billsTotal: r2(totalOut - flexTotal), inTotal, savedTotal,
+      ranked, topItems: topItems.slice(0, 5), weekBars, flexPlan, billsWeekly, predictions, tips };
+  }
+
   const Core = { GROUPS, PER, MON, d, iso, weekly, plan, trip, simulate, combined, target, readyIndex, spare, pay, weeklyPay, monLabel,
     norm, guessGroup, addDays, weekStart, rowIndexFor, addToTracker, groupPlan, weekStatus, favourites,
-    endOf, endLabel, afterLabel, guessKind, guessGoal, defaultGoals, sumKind, goalInfo, balance, billStatus, matchBill, billPaidIn };
+    endOf, endLabel, afterLabel, guessKind, guessGoal, defaultGoals, sumKind, goalInfo, balance, billStatus, matchBill, billPaidIn, insights, saveShares };
   if (typeof module === 'object' && module.exports) module.exports = Core; else root.Core = Core;
 })(this);

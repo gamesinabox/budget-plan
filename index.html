@@ -3,120 +3,157 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f3f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0b0d" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Budget">
 <title>Weekly Budget</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='white' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 <div class="wrap">
-  <header class="top">
-    <div>
-      <h1>Weekly Budget</h1>
-      <p class="sub" id="today-line"></p>
-    </div>
-  </header>
 
-  <!-- QUICK ADD: the thing you open the page for -->
-  <form class="card quick" id="quick" autocomplete="off" novalidate>
-    <h2 class="sr">Log money in or out</h2>
-    <div class="kind" role="radiogroup" aria-label="What kind of entry">
-      <button type="button" role="radio" data-kind="out" aria-checked="true">Spent</button>
-      <button type="button" role="radio" data-kind="in" aria-checked="false">Got paid</button>
-      <button type="button" role="radio" data-kind="save" aria-checked="false">Saved</button>
-    </div>
-    <div class="qrow">
+  <!-- HOME -->
+  <section id="p-week" aria-label="Home">
+    <header class="apphead">
+      <div><p class="eyebrow" id="today-line"></p><h1>Budget</h1></div>
+      <button type="button" class="balchip" id="bal-edit"><span class="lab">Account</span><b id="m-bal">-</b></button>
+    </header>
+    <form id="bal-form" class="card balform" hidden>
+      <label for="bal-amt">What does your bank app say right now?</label>
+      <div class="balrow"><span class="dollar" aria-hidden="true">$</span><input id="bal-amt" type="number" step="0.01" inputmode="decimal" placeholder="0.00"><button class="add" type="submit">Save</button></div>
+      <p class="note">From here on it moves with everything you log.</p>
+    </form>
+
+    <!-- QUICK ADD: the thing you open the page for -->
+    <form class="card quick" id="quick" autocomplete="off" novalidate>
+      <h2 class="sr">Log money in or out</h2>
+      <div class="kind" role="radiogroup" aria-label="What kind of entry">
+        <button type="button" role="radio" data-kind="out" aria-checked="true">Spent</button>
+        <button type="button" role="radio" data-kind="in" aria-checked="false">Got paid</button>
+        <button type="button" role="radio" data-kind="save" aria-checked="false">Saved</button>
+      </div>
       <label class="qname"><span class="sr" id="q-name-lab">What did you buy?</span>
-        <input id="q-name" placeholder="What did you buy?" list="q-names" enterkeyhint="next" autofocus required></label>
-      <label class="qamt"><span class="sr">Price in dollars</span>
-        <span class="dollar" aria-hidden="true">$</span>
-        <input id="q-amt" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="0.00" enterkeyhint="done" required></label>
-      <button class="add" type="submit">Add</button>
-    </div>
-    <div class="qmeta">
-      <label class="cat" id="q-cat"><span class="dot" id="q-dot"></span><span class="sr">Category</span>
-        <select id="q-group" aria-label="Category"></select></label>
-      <label class="cat when"><span class="sr">Date</span><input type="date" id="q-date"></label>
-      <span class="cat static" id="q-income" hidden><span class="dot" style="background:var(--good)"></span>Income</span>
-      <span class="hint" id="q-hint">Type an item and I'll pick the category. Tap it to change.</span>
-    </div>
-    <div class="chips" id="q-favs" aria-label="One-tap repeats"></div>
-    <datalist id="q-names"></datalist>
-  </form>
-
-  <!-- SUMMARY STRIP -->
-  <div class="strip" aria-live="polite">
-    <div class="tile"><div class="lab">Left to save each week</div><div class="val" id="s-left">-</div><div class="note" id="s-left-sub"></div></div>
-    <div class="tile"><div class="lab">Apartment deposit ready</div><div class="val" id="s-ready">-</div><span class="pill" id="s-pill"></span></div>
-    <div class="tile"><div class="lab">Europe fund check</div><div class="val" id="s-eur">-</div><span class="pill" id="s-eur-pill"></span></div>
-  </div>
-
-  <nav class="tabs" role="tablist" aria-label="Sections">
-    <button role="tab" id="tab-week" aria-controls="p-week" aria-selected="true" data-tab="week">This week</button>
-    <button role="tab" id="tab-goals" aria-controls="p-goals" aria-selected="false" data-tab="goals">Goals</button>
-    <button role="tab" id="tab-budget" aria-controls="p-budget" aria-selected="false" data-tab="budget">Budget</button>
-    <button role="tab" id="tab-europe" aria-controls="p-europe" aria-selected="false" data-tab="europe">Europe</button>
-    <button role="tab" id="tab-timeline" aria-controls="p-timeline" aria-selected="false" data-tab="timeline">House</button>
-    <button role="tab" id="tab-tracker" aria-controls="p-tracker" aria-selected="false" data-tab="tracker">Tracker</button>
-  </nav>
-
-  <!-- THIS WEEK -->
-  <section id="p-week" role="tabpanel" aria-labelledby="tab-week">
-    <div class="weekhero">
-      <div class="card big-left">
-        <div class="lab">Spending money left this week</div>
-        <div class="huge" id="w-left">-</div>
-        <div class="note" id="w-perday"></div>
-        <div class="meter" aria-hidden="true"><span id="w-meter"></span></div>
-        <div class="note" id="w-of"></div>
+        <input id="q-name" placeholder="What did you buy?" list="q-names" enterkeyhint="next" autofocus></label>
+      <div class="qrow">
+        <label class="qamt"><span class="sr">Amount in dollars</span>
+          <span class="dollar" aria-hidden="true">$</span>
+          <input id="q-amt" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="0.00" enterkeyhint="done"></label>
+        <button class="add" type="submit">Add</button>
       </div>
-      <div class="card big-save">
+      <div class="qmeta">
+        <label class="chipsel" id="q-cat"><span class="dot" id="q-dot"></span><span class="sr">Category</span>
+          <select id="q-group" aria-label="Category"></select></label>
+        <span class="chipsel static" id="q-income" hidden><span class="dot" style="background:var(--good)"></span>Income</span>
+        <label class="chipsel when"><span class="sr">Date</span><input type="date" id="q-date"></label>
+      </div>
+      <p class="hint" id="q-hint"></p>
+      <div class="favs" id="q-favs" aria-label="One-tap repeats"></div>
+      <datalist id="q-names"></datalist>
+    </form>
+
+    <!-- WEEK HERO -->
+    <div class="hero">
+      <div class="hero-top">
+        <div>
+          <div class="hero-lab">Spending money left <span id="w-range"></span></div>
+          <div class="hero-num" id="w-left">-</div>
+          <div class="hero-sub" id="w-perday"></div>
+        </div>
+        <svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" class="ring-track"/><circle cx="32" cy="32" r="27" class="ring-fill" id="w-ring" pathLength="100" stroke-dasharray="0 100"/><text x="32" y="36" text-anchor="middle" id="w-ring-t"></text></svg>
+      </div>
+      <div class="hero-of" id="w-of"></div>
+      <div class="hero-stats">
+        <div><span>In</span><b id="m-in">-</b></div>
+        <div><span>Out</span><b id="m-out">-</b></div>
+        <div><span>Saved</span><b id="m-save">-</b></div>
+      </div>
+    </div>
+
+    <div class="card savecard">
+      <div>
         <div class="lab">On track to save this week</div>
-        <div class="huge" id="w-save">-</div>
-        <span class="pill" id="w-pill"></span>
+        <div class="bignum" id="w-save">-</div>
         <div class="note" id="w-save-note"></div>
+        <div class="note" id="m-save-of"></div>
       </div>
+      <span class="pill" id="w-pill"></span>
     </div>
 
-    <div class="card money">
-      <div><div class="lab">Money in</div><div class="mval pos" id="m-in">-</div></div>
-      <div><div class="lab">Money out</div><div class="mval" id="m-out">-</div></div>
-      <div><div class="lab">Moved to savings</div><div class="mval" id="m-save">-</div><div class="note" id="m-save-of"></div></div>
-      <div><div class="lab">Everyday account</div><div class="mval" id="m-bal">-</div>
-        <button type="button" class="linkbtn" id="bal-edit">Set balance</button>
-        <form id="bal-form" class="balform" hidden><label class="sr" for="bal-amt">Balance now ($)</label>
-          <input id="bal-amt" type="number" step="0.01" inputmode="decimal" placeholder="Balance now"><button class="btn" type="submit">Save</button></form>
-      </div>
+    <div class="sechead"><h2>This week by category</h2></div>
+    <div class="card list" id="w-groups"></div>
+
+    <div class="sechead"><h2>Bills</h2><span class="muted" id="w-bills-sum"></span></div>
+    <div class="card list" id="w-bills"></div>
+    <p class="note">Bills count at their weekly share every week, whenever you pay them. Day-to-day spending you haven't logged yet counts at its full plan.</p>
+
+    <div class="sechead"><h2>Recent activity</h2></div>
+    <div class="card list log" id="w-log"></div>
+  </section>
+
+  <!-- INSIGHTS -->
+  <section id="p-insights" aria-label="Insights" hidden>
+    <header class="apphead"><div><p class="eyebrow">Where it goes and where it's heading</p><h1>Insights</h1></div></header>
+    <div class="seg" role="radiogroup" aria-label="Period" id="i-range">
+      <button type="button" role="radio" data-days="28" aria-checked="true">4 weeks</button>
+      <button type="button" role="radio" data-days="91" aria-checked="false">3 months</button>
+      <button type="button" role="radio" data-days="0" aria-checked="false">All time</button>
+    </div>
+    <div class="hero ihero" id="i-hero"></div>
+
+    <div class="sechead"><h2>Predictions</h2></div>
+    <div id="i-pred" class="predgrid"></div>
+
+    <div class="sechead"><h2>Ways to save more</h2></div>
+    <div id="i-tips" class="tips"></div>
+
+    <div class="sechead"><h2>Where your money goes</h2></div>
+    <div class="card list" id="i-groups"></div>
+
+    <div class="sechead"><h2>Day-to-day spending by week</h2></div>
+    <div class="card chartcard">
+      <p class="note" id="i-week-cap">Tap a bar for the week's total. Bills are left out because they're spread evenly.</p>
+      <div id="i-weeks"></div>
+      <details><summary>Show as a table</summary><div id="i-weeks-table"></div></details>
     </div>
 
-    <h2>By category <span class="muted" id="w-range"></span></h2>
-    <div class="card groups" id="w-groups"></div>
-    <h2>Bills <span class="muted" id="w-bills-sum"></span></h2>
-    <div class="card bills" id="w-bills"></div>
-    <p class="note">Bills count at their weekly share every week, whenever you actually pay them, so a monthly bill never makes one week look bad. Choose which items are bills on the Budget tab. Day-to-day spending you haven't logged yet counts at its full plan, so the saving figure only drops when you overspend.</p>
-
-    <h2>Recent activity</h2>
-    <div class="card log" id="w-log"></div>
+    <div class="sechead"><h2>Biggest items</h2></div>
+    <div class="card list" id="i-items"></div>
   </section>
 
   <!-- GOALS -->
-  <section id="p-goals" role="tabpanel" aria-labelledby="tab-goals" hidden>
-    <h2>Your goals</h2>
-    <p class="note">Log a transfer with <b>Saved</b> at the top and it counts towards the goal you pick. Change any target or date here and every plan updates.</p>
+  <section id="p-goals" aria-label="Goals" hidden>
+    <header class="apphead"><div><p class="eyebrow">What you log as Saved is shared across these</p><h1>Goals</h1></div></header>
     <div id="goals" class="goals"></div>
-    <div class="row"><button class="btn" id="add-goal" type="button">Add a goal</button></div>
+    <div class="row"><button class="btn wide" id="add-goal" type="button">+ Add a goal</button></div>
     <p class="note">Weekly money for goals you add comes out of the house fund, so the deposit date moves when you add one.</p>
   </section>
 
+  <!-- PLAN -->
+  <div id="plan-head" hidden>
+    <header class="apphead"><div><p class="eyebrow">Budget, trip, house and history</p><h1>Plan</h1></div></header>
+    <div class="strip" aria-live="polite">
+      <div class="tile"><div class="lab">Left to save each week</div><div class="val" id="s-left">-</div><div class="note" id="s-left-sub"></div></div>
+      <div class="tile"><div class="lab">Apartment deposit ready</div><div class="val" id="s-ready">-</div><span class="pill" id="s-pill"></span></div>
+      <div class="tile"><div class="lab">Europe fund check</div><div class="val" id="s-eur">-</div><span class="pill" id="s-eur-pill"></span></div>
+    </div>
+    <nav class="seg subnav" aria-label="Plan sections">
+      <button type="button" data-tab="budget">Budget</button>
+      <button type="button" data-tab="europe">Europe</button>
+      <button type="button" data-tab="timeline">House</button>
+      <button type="button" data-tab="tracker">Tracker</button>
+    </nav>
+  </div>
+
   <!-- BUDGET -->
-  <section id="p-budget" role="tabpanel" aria-labelledby="tab-budget" hidden>
+  <section id="p-budget" class="plansec" aria-label="budget" hidden>
     <h2>Weekly budget</h2>
     <div class="grid" style="max-width:420px">
       <label class="f" for="takeHome">Take-home pay per week ($)<input id="takeHome" type="number" step="any" min="0" inputmode="decimal" data-bind="takeHome"></label>
     </div>
     <h3>Spending (enter each amount in its own period)</h3>
-    <div class="scroll"><table>
+    <div class="scroll"><table class="btable">
       <thead><tr><th>Item</th><th class="num">Amount</th><th>Per</th><th>Tracker group</th><th>Bill</th><th class="num">Weekly</th><th><span class="sr">Remove</span></th></tr></thead>
       <tbody id="items"></tbody>
       <tfoot>
@@ -143,7 +180,7 @@
   </section>
 
   <!-- EUROPE -->
-  <section id="p-europe" role="tabpanel" aria-labelledby="tab-europe" hidden>
+  <section id="p-europe" class="plansec" aria-label="europe" hidden>
     <h2>Europe trip and ring</h2>
     <div class="grid">
       <label class="f" for="fx">AUD per 1 EUR<input id="fx" type="number" step="0.01" min="0" inputmode="decimal" data-bind="fx"></label>
@@ -180,7 +217,7 @@
   </section>
 
   <!-- HOUSE -->
-  <section id="p-timeline" role="tabpanel" aria-labelledby="tab-timeline" hidden>
+  <section id="p-timeline" class="plansec" aria-label="timeline" hidden>
     <h2>Apartment deposit timeline</h2>
     <div class="grid">
       <label class="f" for="price">Apartment price ($)<input id="price" type="number" step="any" min="0" inputmode="decimal" data-bind="price"></label>
@@ -231,7 +268,7 @@
   </section>
 
   <!-- TRACKER -->
-  <section id="p-tracker" role="tabpanel" aria-labelledby="tab-tracker" hidden>
+  <section id="p-tracker" class="plansec" aria-label="tracker" hidden>
     <h2>Weekly tracker</h2>
     <p class="note">One row per week. Purchases you log at the top land here automatically. Over/(under) and Saved count bills at their weekly share; if you type totals in by hand, leave bills out.</p>
     <div class="scroll"><table id="trk-table" style="min-width:880px">
@@ -253,6 +290,14 @@
     </details>
   </section>
 </div>
+
+<nav class="bnav" aria-label="Main">
+  <button type="button" data-tab="week" data-nav><span data-icon="home"></span><span>Home</span></button>
+  <button type="button" data-tab="insights" data-nav><span data-icon="chart"></span><span>Insights</span></button>
+  <button type="button" class="fab" id="fab" aria-label="Log money in or out"><span data-icon="plus"></span></button>
+  <button type="button" data-tab="goals" data-nav><span data-icon="target"></span><span>Goals</span></button>
+  <button type="button" data-tab="budget" data-nav="plan"><span data-icon="sliders"></span><span>Plan</span></button>
+</nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-msg"></span><button type="button" id="toast-undo">Undo</button></div>
 

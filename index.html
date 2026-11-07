@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<title>Weekly Budget</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='white' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Weekly Budget</h1>
+      <p class="sub" id="today-line"></p>
+    </div>
+  </header>
+
+  <!-- QUICK ADD: the thing you open the page for -->
+  <form class="card quick" id="quick" autocomplete="off" novalidate>
+    <h2 class="sr">Log a purchase</h2>
+    <div class="qrow">
+      <label class="qname"><span class="sr">What did you buy?</span>
+        <input id="q-name" placeholder="What did you buy?" list="q-names" enterkeyhint="next" autofocus required></label>
+      <label class="qamt"><span class="sr">Price in dollars</span>
+        <span class="dollar" aria-hidden="true">$</span>
+        <input id="q-amt" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="0.00" enterkeyhint="done" required></label>
+      <button class="add" type="submit">Add</button>
+    </div>
+    <div class="qmeta">
+      <label class="cat"><span class="dot" id="q-dot"></span><span class="sr">Category</span>
+        <select id="q-group" aria-label="Category"></select></label>
+      <span class="hint" id="q-hint">Type an item and I'll pick the category. Tap it to change.</span>
+    </div>
+    <div class="chips" id="q-favs" aria-label="One-tap repeats"></div>
+    <datalist id="q-names"></datalist>
+  </form>
+
+  <!-- SUMMARY STRIP -->
+  <div class="strip" aria-live="polite">
+    <div class="tile"><div class="lab">Left to save each week</div><div class="val" id="s-left">-</div><div class="note" id="s-left-sub"></div></div>
+    <div class="tile"><div class="lab">Apartment deposit ready</div><div class="val" id="s-ready">-</div><span class="pill" id="s-pill"></span></div>
+    <div class="tile"><div class="lab">Europe fund check</div><div class="val" id="s-eur">-</div><span class="pill" id="s-eur-pill"></span></div>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="tab-week" aria-controls="p-week" aria-selected="true" data-tab="week">This week</button>
+    <button role="tab" id="tab-budget" aria-controls="p-budget" aria-selected="false" data-tab="budget">Budget</button>
+    <button role="tab" id="tab-europe" aria-controls="p-europe" aria-selected="false" data-tab="europe">Europe</button>
+    <button role="tab" id="tab-timeline" aria-controls="p-timeline" aria-selected="false" data-tab="timeline">House</button>
+    <button role="tab" id="tab-tracker" aria-controls="p-tracker" aria-selected="false" data-tab="tracker">Tracker</button>
+  </nav>
+
+  <!-- THIS WEEK -->
+  <section id="p-week" role="tabpanel" aria-labelledby="tab-week">
+    <div class="weekhero">
+      <div class="card big-left">
+        <div class="lab">Spending money left this week</div>
+        <div class="huge" id="w-left">-</div>
+        <div class="note" id="w-perday"></div>
+        <div class="meter" aria-hidden="true"><span id="w-meter"></span></div>
+        <div class="note" id="w-of"></div>
+      </div>
+      <div class="card big-save">
+        <div class="lab">On track to save this week</div>
+        <div class="huge" id="w-save">-</div>
+        <span class="pill" id="w-pill"></span>
+        <div class="note" id="w-save-note"></div>
+      </div>
+    </div>
+
+    <h2>By category <span class="muted" id="w-range"></span></h2>
+    <div class="card groups" id="w-groups"></div>
+    <p class="note">Rent and phone &amp; wifi are bills, so they are not in "spending money". Anything you have not logged yet is counted at its full plan, so the saving figure only goes down when you overspend.</p>
+
+    <h2>Recent purchases</h2>
+    <div class="card log" id="w-log"></div>
+  </section>
+
+  <!-- BUDGET -->
+  <section id="p-budget" role="tabpanel" aria-labelledby="tab-budget" hidden>
+    <h2>Weekly budget</h2>
+    <div class="grid" style="max-width:420px">
+      <label class="f" for="takeHome">Take-home pay per week ($)<input id="takeHome" type="number" step="any" min="0" inputmode="decimal" data-bind="takeHome"></label>
+    </div>
+    <h3>Spending (enter each amount in its own period)</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Item</th><th class="num">Amount</th><th>Per</th><th>Tracker group</th><th class="num">Weekly</th><th><span class="sr">Remove</span></th></tr></thead>
+      <tbody id="items"></tbody>
+      <tfoot>
+        <tr><td colspan="4">Total spending</td><td class="num" id="b-spend">-</td><td></td></tr>
+        <tr><td colspan="4">Left to save each week</td><td class="num" id="b-left">-</td><td></td></tr>
+        <tr><td colspan="4">Savings rate</td><td class="num" id="b-rate">-</td><td></td></tr>
+      </tfoot>
+    </table></div>
+    <div class="row"><button class="btn" id="add-item" type="button">Add an item</button></div>
+    <p class="note">Rego, servicing and insurance arrive in lumps. Set their weekly amounts aside in a separate "car bills" account and pay the bills from it.</p>
+
+    <h2>Where the savings go</h2>
+    <div class="grid">
+      <label class="f" for="europeFund">Europe trip + ring fund per week, until the trip ($)<input id="europeFund" type="number" step="any" min="0" inputmode="decimal" data-bind="europeFund"></label>
+    </div>
+    <div class="scroll" style="margin-top:10px"><table class="kv">
+      <tbody>
+        <tr><td>House fund per week, until the trip</td><td class="num big" id="b-pre">-</td></tr>
+        <tr><td>House fund per week, after the trip</td><td class="num big" id="b-post">-</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">Your existing savings stay in the house fund. The trip and ring are paid only from the weekly Europe fund.</p>
+  </section>
+
+  <!-- EUROPE -->
+  <section id="p-europe" role="tabpanel" aria-labelledby="tab-europe" hidden>
+    <h2>Europe trip and ring</h2>
+    <div class="grid">
+      <label class="f" for="fx">AUD per 1 EUR<input id="fx" type="number" step="0.01" min="0" inputmode="decimal" data-bind="fx"></label>
+      <label class="f" for="travellers">Travellers<input id="travellers" type="number" step="1" min="1" inputmode="numeric" data-bind="travellers"></label>
+      <label class="f" for="depart">Departure date<input id="depart" type="date" data-bind="depart"></label>
+      <label class="f" for="planStart">Plan start date<input id="planStart" type="date" data-bind="planStart"></label>
+      <label class="f" for="ring">Engagement ring ($)<input id="ring" type="number" step="any" min="0" inputmode="decimal" data-bind="ring"></label>
+      <label class="f" for="tripShare">Your share of the trip (%)<input id="tripShare" type="number" step="1" min="0" max="100" inputmode="numeric" data-bind="tripShare"></label>
+      <label class="f" for="scenario">Trip style used in the plan
+        <select id="scenario" data-bind="scenario"><option value="lean">Lean</option><option value="mid">Mid-range</option><option value="comfy">Comfortable</option></select></label>
+    </div>
+    <p class="note">The ring is a placeholder. Daily costs are mid-range planning estimates from 2026 travel guides, not quotes. Recheck the exchange rate, flights and prices closer to 2028.</p>
+
+    <h3>Itinerary (euros per person per day, mid-range)</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Country</th><th class="num">Days</th><th class="num">EUR per day</th><th class="num">EUR per person</th><th><span class="sr">Remove</span></th></tr></thead>
+      <tbody id="itin"></tbody>
+      <tfoot><tr><td>Total</td><td class="num" id="e-days">-</td><td></td><td class="num" id="e-eur">-</td><td></td></tr></tfoot>
+    </table></div>
+    <div class="row"><button class="btn" id="add-country" type="button">Add a country</button></div>
+
+    <h3>Trip style assumptions</h3>
+    <div class="scroll"><table id="sc-table">
+      <thead><tr><th>Assumption</th><th class="num">Lean</th><th class="num">Mid-range</th><th class="num">Comfortable</th></tr></thead>
+      <tbody id="sc-body"></tbody>
+    </table></div>
+
+    <h3>What it costs</h3>
+    <div class="scroll"><table id="res-table">
+      <thead><tr><th>For both of you (AUD)</th><th class="num" data-col="lean">Lean</th><th class="num" data-col="mid">Mid-range</th><th class="num" data-col="comfy">Comfortable</th></tr></thead>
+      <tbody id="res-body"></tbody>
+    </table></div>
+    <p class="note" id="e-verdict" style="margin-top:10px"></p>
+  </section>
+
+  <!-- HOUSE -->
+  <section id="p-timeline" role="tabpanel" aria-labelledby="tab-timeline" hidden>
+    <h2>Apartment deposit timeline</h2>
+    <div class="grid">
+      <label class="f" for="price">Apartment price ($)<input id="price" type="number" step="any" min="0" inputmode="decimal" data-bind="price"></label>
+      <label class="f" for="depositPct">Deposit (%)<input id="depositPct" type="number" step="1" min="0" max="100" inputmode="numeric" data-bind="depositPct"></label>
+      <label class="f" for="costs">Other buying costs ($)<input id="costs" type="number" step="any" min="0" inputmode="decimal" data-bind="costs"></label>
+      <label class="f" for="duty">Stamp duty ($)<input id="duty" type="number" step="any" min="0" inputmode="decimal" data-bind="duty"></label>
+      <label class="f" for="houseShare">Your share of the cash (%)<input id="houseShare" type="number" step="1" min="0" max="100" inputmode="numeric" data-bind="houseShare"></label>
+      <label class="f" for="reserve">Savings to keep after buying ($)<input id="reserve" type="number" step="any" min="0" inputmode="decimal" data-bind="reserve"></label>
+      <label class="f" for="saveStart">Savings at plan start ($)<input id="saveStart" type="number" step="any" min="0" inputmode="decimal" data-bind="saveStart"></label>
+      <label class="f" for="rate">Savings interest (% a year)<input id="rate" type="number" step="0.1" min="0" inputmode="decimal" data-bind="rate"></label>
+      <label class="f" for="mortRate">Home loan rate (% a year)<input id="mortRate" type="number" step="0.05" min="0" inputmode="decimal" data-bind="mortRate"></label>
+    </div>
+    <p class="note">Stamp duty is $0 for eligible first home buyers up to $800,000 in NSW. Check eligibility with Revenue NSW or a broker.</p>
+
+    <div class="scroll" style="margin-top:12px"><table class="kv">
+      <tbody>
+        <tr><td>Cash needed at settlement, between you (deposit + costs + duty)</td><td class="num big" id="t-comb">-</td></tr>
+        <tr><td>Your savings needed (your share + the amount you keep)</td><td class="num big" id="t-target">-</td></tr>
+        <tr><td>House fund reaches that in</td><td class="num big" id="t-ready">-</td></tr>
+        <tr><td>Loan</td><td class="num big" id="t-loan">-</td></tr>
+        <tr><td>Repayment per week</td><td class="num big" id="t-repay">-</td></tr>
+        <tr><td>House fund just before the trip</td><td class="num" id="t-pre">-</td></tr>
+        <tr><td>Europe fund just before the trip</td><td class="num" id="t-eurfund">-</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>House fund over time</h3>
+    <p class="cap" id="chart-cap"></p>
+    <div class="chartbox" id="chartbox">
+      <div id="chart" tabindex="0" role="img" aria-label="Line chart of the house fund balance by month with the target line"></div>
+      <div class="tip" id="tip"></div>
+    </div>
+
+    <h3>Compare deposits</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Deposit</th><th class="num">Loan</th><th class="num">Repayment / week</th><th class="num">Your savings needed</th><th class="num">Ready</th></tr></thead>
+      <tbody id="cmp"></tbody>
+    </table></div>
+    <p class="note">Repayments assume a 30-year principal and interest loan. A lender will test the loan at a higher rate than you pay. Below a 20% deposit you need a scheme or insurance to avoid lenders mortgage insurance; check with a broker.</p>
+
+    <details><summary>Show the month-by-month table</summary>
+      <div class="scroll" style="margin-top:8px"><table>
+        <thead><tr><th>Month</th><th>Phase</th><th class="num">Saved</th><th class="num">Interest</th><th class="num">House fund</th><th class="num">Europe fund</th></tr></thead>
+        <tbody id="mt"></tbody>
+      </table></div>
+    </details>
+  </section>
+
+  <!-- TRACKER -->
+  <section id="p-tracker" role="tabpanel" aria-labelledby="tab-tracker" hidden>
+    <h2>Weekly tracker</h2>
+    <p class="note">One row per week. Purchases you log at the top land here automatically; you can also type totals in directly.</p>
+    <div class="scroll"><table id="trk-table" style="min-width:880px">
+      <thead id="trk-head"></thead>
+      <tbody id="trk"></tbody>
+    </table></div>
+    <div class="row"><button class="btn" id="add-week" type="button">Add a week</button></div>
+    <p id="trk-sum" class="big"></p>
+
+    <details><summary>Backup and reset</summary>
+      <p class="note">Your numbers live in this browser only. To move them to another device, copy the text below, then paste it into the same box on the other device and press Load.</p>
+      <textarea id="bk" aria-label="Backup data" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="btn" id="bk-fill" type="button">Show my data</button>
+        <button class="btn" id="bk-load" type="button">Load from the box</button>
+        <button class="ghost" id="reset" type="button">Reset to the starting plan</button>
+      </div>
+      <p class="note" id="bk-msg" aria-live="polite"></p>
+    </details>
+  </section>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-msg"></span><button type="button" id="toast-undo">Undo</button></div>
+
+<script src="js/core.js"></script>
+<script src="js/defaults.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

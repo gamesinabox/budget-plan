@@ -1,0 +1,4 @@
+personal.json
+*.csv
+*.local.json
+*.local.test.js

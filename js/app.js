@@ -27,6 +27,8 @@ function merge(base, saved) {
   if (!base.learned || typeof base.learned !== 'object') base.learned = {};
   if (!base.learnedKind || typeof base.learnedKind !== 'object') base.learnedKind = {};
   if (!Array.isArray(base.goals) || !base.goals.length) base.goals = Core.defaultGoals(base);
+  // Data saved before bills existed: guess which items are bills.
+  if (!base.items.some(i => 'bill' in i)) base.items.forEach(i => { i.bill = i.group === 'Rent' || i.group === 'Phone & wifi' || /insurance|rego|servic/i.test(i.name); });
   return base;
 }
 function load() {
@@ -55,14 +57,34 @@ const opt = (list, cur) => list.map(x => `<option${x === cur ? ' selected' : ''}
 /* ----- quick log ----- */
 const qn = $('q-name'), qa = $('q-amt'), qg = $('q-group');
 let picked = false, kindPicked = false, kind = 'out', undoFn = null, toastT;
-qg.innerHTML = opt(GROUPS, 'Buffer');
 const PH = { out: 'What did you buy?', in: 'Who paid you? (e.g. pay)', save: 'Saved for what? (e.g. house)' };
 const goalOpts = cur => S.goals.map(g => `<option value="${esc(g.id)}"${g.id === cur ? ' selected' : ''}>${esc(g.name)}</option>`).join('');
 const goalName = id => (S.goals.find(g => g.id === id) || { name: 'Savings' }).name;
 const guessGoalFor = name => S.goals.some(g => g.id === S.learned[Core.norm(name)]) ? S.learned[Core.norm(name)] : Core.guessGoal(name, S.goals);
-const paintDot = () => { $('q-dot').style.background = kind === 'save' ? 'var(--s1)' : `var(--g${GROUPS.indexOf(qg.value)})`; };
+/* Spending dropdown: the categories, then your bills. A bill's value is "bill:<item name>". */
+const bills = () => S.items.filter(i => i.bill);
+const outOpts = cur => `<optgroup label="Spending">${GROUPS.map(g => `<option value="${esc(g)}"${g === cur ? ' selected' : ''}>${esc(g)}</option>`).join('')}</optgroup>` +
+  (bills().length ? `<optgroup label="Bills">${bills().map(b => { const v = 'bill:' + b.name; return `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(b.name)} (bill)</option>`; }).join('')}</optgroup>` : '');
+const outVal = e => e.bill ? 'bill:' + e.bill : e.group;
+const parseOut = v => {
+  if (!String(v).startsWith('bill:')) return { group: v, bill: null };
+  const b = bills().find(i => i.name === v.slice(5));
+  return { group: b ? b.group : 'Buffer', bill: v.slice(5) };
+};
+function guessOut(name) {
+  const l = S.learned[Core.norm(name)];
+  if (typeof l === 'string' && (GROUPS.includes(l) || bills().some(b => 'bill:' + b.name === l))) return l;
+  const b = Core.matchBill(name, S.items);
+  return b ? 'bill:' + b : (Core.guessGroup(name, S.learned) || 'Eating out & social');
+}
+qg.innerHTML = outOpts('Buffer');
+const qd = $('q-date');
+const resetDate = () => { qd.value = qd.max = todayDs(); qd.classList.remove('past'); };
+resetDate();
+qd.addEventListener('change', () => { if (!qd.value) qd.value = todayDs(); qd.classList.toggle('past', qd.value !== todayDs()); });
+const paintDot = () => { $('q-dot').style.background = kind === 'save' ? 'var(--s1)' : `var(--g${GROUPS.indexOf(parseOut(qg.value).group)})`; };
 function setKind(k) {
-  if (k !== kind) { kind = k; picked = false; qg.innerHTML = kind === 'save' ? goalOpts() : opt(GROUPS, 'Buffer'); }
+  if (k !== kind) { kind = k; picked = false; qg.innerHTML = kind === 'save' ? goalOpts() : outOpts('Buffer'); }
   document.querySelectorAll('[data-kind]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.kind === kind)));
   qn.placeholder = PH[kind]; $('q-name-lab').textContent = PH[kind];
   $('q-cat').hidden = kind === 'in'; $('q-income').hidden = kind !== 'in';
@@ -71,7 +93,7 @@ function setKind(k) {
 function syncGuess() {
   const has = qn.value.trim() !== '';
   if (!kindPicked) setKind(has ? Core.guessKind(qn.value, S.learnedKind) : 'out');
-  if (!picked) qg.value = kind === 'save' ? guessGoalFor(qn.value) : (Core.guessGroup(qn.value, S.learned) || 'Eating out & social');
+  if (!picked) qg.value = kind === 'save' ? guessGoalFor(qn.value) : guessOut(qn.value);
   paintDot();
   $('q-hint').textContent = !has ? 'Type what it was and I\'ll sort it. Tap to change.' : kind === 'in' ? 'Money in. Logged as income.' : picked ? 'Your pick. I\'ll remember it for next time.' : 'Guessed. Tap to change it.';
 }
@@ -94,7 +116,7 @@ $('quick').addEventListener('submit', e => {
 });
 $('q-favs').addEventListener('click', e => {
   const b = e.target.closest('[data-fav]'); if (!b) return;
-  const f = Core.favourites(S.log, 6)[+b.dataset.fav]; if (f) logItem(f.name, f.amt, f.kind, f.group);
+  const f = Core.favourites(S.log, 6)[+b.dataset.fav]; if (f) logItem(f.name, f.amt, f.kind, f.bill ? 'bill:' + f.bill : f.group);
 });
 document.addEventListener('keydown', e => {
   if (e.key === '/' && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); qn.focus(); }
@@ -102,15 +124,22 @@ document.addEventListener('keydown', e => {
 
 // Only spending ('out') feeds the weekly tracker; money in and savings transfers don't.
 const track = (e, sign) => { if ((e.kind || 'out') === 'out') Core.addToTracker(S.tracker, e.t.slice(0, 10), e.group, sign * e.amt); };
-function logItem(name, amt, kind, group) {
-  const e = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: nowStamp(), name, amt, kind, group };
+// val is a category, "bill:<item>" for spending, a goal id for savings, or 'Income'.
+function logItem(name, amt, kind, val) {
+  const day = qd.value && qd.value <= todayDs() ? qd.value : todayDs();
+  const e = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: day + nowStamp().slice(10), name, amt, kind, group: val };
+  if (kind === 'out') { const p = parseOut(val); e.group = p.group; if (p.bill) e.bill = p.bill; }
   S.log.push(e);
+  S.log.sort((a, b) => a.t.localeCompare(b.t)); // a back-dated entry goes in its place
   const n = Core.norm(name);
   S.learnedKind[n] = kind;
-  if (kind !== 'in') S.learned[n] = group;
+  if (kind !== 'in') S.learned[n] = val;
   track(e, 1);
+  resetDate();
   buildTracker(); update();
-  toast(kind === 'in' ? `Added ${name}, +${money2(amt)} in` : kind === 'save' ? `Saved ${money2(amt)} to ${goalName(group)}` : `Added ${name}, ${money2(amt)} to ${group}`, () => removeEntry(e.id));
+  const when = day === todayDs() ? '' : ` on ${dayName(day)}`;
+  toast((kind === 'in' ? `Added ${name}, +${money2(amt)} in` : kind === 'save' ? `Saved ${money2(amt)} to ${goalName(e.group)}`
+    : `Added ${name}, ${money2(amt)} to ${e.bill ? e.bill + ' (bill)' : e.group}`) + when, () => removeEntry(e.id));
 }
 function removeEntry(id) {
   const i = S.log.findIndex(x => x.id === id); if (i < 0) return;
@@ -118,10 +147,13 @@ function removeEntry(id) {
   S.log.splice(i, 1);
   buildTracker(); update();
 }
-function regroup(id, g) {
-  const e = S.log.find(x => x.id === id); if (!e || e.group === g) return;
-  track(e, -1); e.group = g; track(e, 1);
-  S.learned[Core.norm(e.name)] = g;
+function regroup(id, v) {
+  const e = S.log.find(x => x.id === id); if (!e) return;
+  track(e, -1);
+  if ((e.kind || 'out') === 'out') { const p = parseOut(v); e.group = p.group; if (p.bill) e.bill = p.bill; else delete e.bill; }
+  else e.group = v;
+  track(e, 1);
+  S.learned[Core.norm(e.name)] = v;
   buildTracker(); update();
 }
 function toast(msg, undo) {
@@ -139,10 +171,8 @@ function renderQuick() {
   $('q-names').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
 }
 
-function renderWeek(planTotal) {
-  const ds = todayDs(), i = Core.rowIndexFor(S.tracker, ds), row = i < 0 ? null : S.tracker[i];
-  const w = Core.weekStatus(S, row ? row.v : {}, ds);
-  const start = row ? row.date : Core.weekStart(ds);
+function renderWeek() {
+  const ds = todayDs(), w = Core.weekStatus(S, ds), start = w.start;
   $('w-range').textContent = `${dayName(start)} to ${dayName(Core.addDays(start, 6))}`;
   const L = $('w-left'); L.textContent = money(w.left); L.classList.toggle('neg', w.left < 0);
   $('w-perday').textContent = w.left > 0 ? `About ${money(w.perDay)} a day for the ${w.daysLeft} day${w.daysLeft > 1 ? 's' : ''} left, today included.` : `You are ${money(-w.left)} over this week. Ease off until Monday.`;
@@ -164,13 +194,21 @@ function renderWeek(planTotal) {
   $('m-bal').textContent = bal === null ? 'Not set' : money2(bal);
   $('m-bal').classList.toggle('neg', bal !== null && bal < 0);
   $('bal-edit').textContent = bal === null ? 'Set balance' : 'Correct it';
-  $('w-groups').innerHTML = GROUPS.map(g => {
-    const sp = row && row.v[g] ? row.v[g] : 0, pl = w.plan[g], r = pl ? sp / pl : (sp ? 2 : 0);
+  $('w-groups').innerHTML = GROUPS.filter(g => w.plan[g] || w.spent[g]).map(g => {
+    const sp = w.spent[g], pl = w.plan[g], r = pl ? sp / pl : (sp ? 2 : 0);
     const cls = r > 1 ? 'crit' : r > 0.85 ? 'warn' : '';
-    return `<div class="grow"><div class="gname">${dot(g)}${esc(g)}${Core.BILLS.includes(g) ? ' <span class="tag">bill</span>' : ''}</div>
+    return `<div class="grow"><div class="gname">${dot(g)}${esc(g)}</div>
       <div class="gbar" aria-hidden="true"><span class="${cls}" style="width:${Math.min(100, r * 100)}%;background:var(--g${GROUPS.indexOf(g)})"></span></div>
       <div class="gnum num"><b class="${cls}">${money2(sp)}</b> <span class="muted">of ${money(pl)}</span></div></div>`;
   }).join('');
+  const bs = Core.billStatus(S, ds), PERIOD = { week: 'this week', month: 'this month', year: 'in the last 12 months' };
+  $('w-bills-sum').textContent = bs.length ? `${money(w.billsWeekly)} a week` : '';
+  $('w-bills').innerHTML = bs.length ? bs.map(b => `<div class="brow">
+      <div class="gname">${dot(b.group)}${esc(b.name)}</div>
+      <div class="muted bper">${money2(b.amt)} a ${b.per}</div>
+      <div class="num">${b.done ? `<span class="pill good"><i aria-hidden="true">✓</i>Paid ${PERIOD[b.per]}</span>`
+        : b.paid ? `<span class="pill warn"><i aria-hidden="true">!</i>${money2(b.paid)} paid ${PERIOD[b.per]}</span>` : '<span class="muted">Not paid ' + PERIOD[b.per] + '</span>'}</div></div>`).join('')
+    : '<p class="empty">No bills yet. Tick "Bill" next to rent, insurance and the like on the Budget tab.</p>';
 }
 
 function renderLog() {
@@ -187,7 +225,7 @@ function renderLog() {
     }
     const k = e.kind || 'out';
     const cat = k === 'in' ? '<span class="lcat">' + kdot(e) + '<span class="muted">Income</span></span>'
-      : `<label class="lcat">${kdot(e)}<select aria-label="${k === 'save' ? 'Goal' : 'Category'} for ${esc(e.name)}" data-regroup>${k === 'save' ? goalOpts(e.group) : opt(GROUPS, e.group)}</select></label>`;
+      : `<label class="lcat">${kdot(e)}<select aria-label="${k === 'save' ? 'Goal' : 'Category'} for ${esc(e.name)}" data-regroup>${k === 'save' ? goalOpts(e.group) : outOpts(outVal(e))}</select></label>`;
     html += `<div class="lrow k-${k}" data-id="${esc(e.id)}">
       <span class="ltime">${esc(e.t.slice(11, 16))}</span>
       <span class="lname">${esc(e.name)}</span>
@@ -278,10 +316,11 @@ function buildBudget() {
       <td><input type="number" step="any" min="0" inputmode="decimal" aria-label="Amount for ${esc(it.name)}" data-k="amt" value="${it.amt}" style="min-width:80px"></td>
       <td><select aria-label="Period for ${esc(it.name)}" data-k="per">${opt(['week', 'month', 'year'], it.per)}</select></td>
       <td><select aria-label="Tracker group for ${esc(it.name)}" data-k="group">${opt(GROUPS, it.group)}</select></td>
+      <td class="c"><input type="checkbox" data-k="bill"${it.bill ? ' checked' : ''} aria-label="${esc(it.name)} is a bill"></td>
       <td class="num" data-w></td>
       <td><button class="ghost" type="button" data-del aria-label="Remove ${esc(it.name)}">Remove</button></td>`;
     tb.appendChild(tr);
-    tr.addEventListener('input', e => { const k = e.target.dataset.k; if (!k) return; it[k] = k === 'amt' ? (parseFloat(e.target.value) || 0) : e.target.value; update(); });
+    tr.addEventListener('input', e => { const k = e.target.dataset.k; if (!k) return; it[k] = k === 'amt' ? (parseFloat(e.target.value) || 0) : k === 'bill' ? e.target.checked : e.target.value; update(); });
     tr.querySelector('[data-del]').onclick = () => { S.items.splice(i, 1); buildBudget(); update(); };
   });
 }
@@ -435,8 +474,11 @@ function update() {
   GROUPS.forEach((g, i) => { const el = $('plan-' + i); if (el) el.textContent = money(gp[g]); });
   const planTotal = p.spend; if ($('plan-total')) $('plan-total').textContent = money(planTotal);
   let used = 0, spentSum = 0, savedSum = 0;
+  const billsWeekly = S.items.filter(it => it.bill).reduce((a, it) => a + Core.weekly(it), 0);
   document.querySelectorAll('#trk tr').forEach((tr, i) => {
-    const r = S.tracker[i]; const vals = Object.values(r.v); const has = vals.length > 0; const tot = vals.reduce((a, b) => a + b, 0);
+    const r = S.tracker[i]; const vals = Object.values(r.v); const has = vals.length > 0;
+    // Bills logged this week are swapped for their weekly share, so a monthly bill doesn't make one week look bad.
+    const tot = vals.reduce((a, b) => a + b, 0) - Core.billPaidIn(S.log, r.date, Core.addDays(r.date, 7)) + billsWeekly;
     tr.querySelector('[data-spent]').textContent = has ? money(tot) : '';
     const over = tr.querySelector('[data-over]'), sv = tr.querySelector('[data-saved]');
     over.textContent = has ? (tot - planTotal > 0 ? money(tot - planTotal) : '(' + money(planTotal - tot) + ')') : '';
@@ -457,7 +499,7 @@ function update() {
 
   /* this week + quick log */
   renderWeek(); renderLog(); renderQuick(); renderGoals();
-  if (kind === 'save') { const v = qg.value; qg.innerHTML = goalOpts(v); } // goal renamed or added
+  if (kind !== 'in') { const v = qg.value; qg.innerHTML = kind === 'save' ? goalOpts(v) : outOpts(v); } // goals or bills renamed or added
   save();
 }
 
@@ -471,10 +513,10 @@ function showTab(name) {
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { history.replaceState(null, '', '#' + b.dataset.tab); showTab(b.dataset.tab); });
 window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(update, 120); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) update(); }); // new day while the tab sat open
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { resetDate(); update(); } }); // new day while the tab sat open
 
 /* ----- buttons ----- */
-$('add-item').onclick = () => { S.items.push({ name: 'New item', amt: 0, per: 'week', group: 'Buffer' }); buildBudget(); update(); };
+$('add-item').onclick = () => { S.items.push({ name: 'New item', amt: 0, per: 'week', group: 'Buffer', bill: false }); buildBudget(); update(); };
 $('add-country').onclick = () => { S.itinerary.push({ c: 'New country', days: 3, eur: 120 }); buildItin(); update(); };
 $('add-week').onclick = () => {
   const last = S.tracker.length ? S.tracker[S.tracker.length - 1].date : null;

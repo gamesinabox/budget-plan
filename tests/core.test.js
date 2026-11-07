@@ -46,8 +46,9 @@ test('logging rolls into the tracker week and undoes cleanly', () => {
 });
 
 test('week status', () => {
-  const s = { takeHome: 1000, europeFund: 0, items: [{ amt: 300, per: 'week', group: 'Rent' }, { amt: 100, per: 'week', group: 'Groceries' }] };
-  const w = Core.weekStatus(s, { Groceries: 130 }, '2026-11-07');
+  const s = { takeHome: 1000, europeFund: 0, items: [{ amt: 300, per: 'week', group: 'Rent', bill: true }, { amt: 100, per: 'week', group: 'Groceries' }],
+    tracker: [{ date: '2026-11-02', v: { Groceries: 130 } }], log: [] };
+  const w = Core.weekStatus(s, '2026-11-07');
   assert.equal(w.left, -30);
   assert.equal(w.daysLeft, 2);
   assert.equal(w.save, 570); // rent assumed at plan, groceries at actual
@@ -91,4 +92,27 @@ test('goals, deadline and account balance', () => {
   assert.equal(Core.balance(s), null);
   s.bal = { amt: 500, at: '2026-11-07T10:30:00' };
   assert.equal(Core.balance(s), 1470); // +1000 in, -30 out; the earlier transfer is before the balance was set
+});
+
+test('a monthly bill counts at its weekly share, whichever week it is paid', () => {
+  const items = [{ name: 'Car insurance', amt: 52, per: 'month', group: 'Car', bill: true }, { name: 'Fuel', amt: 40, per: 'week', group: 'Car' },
+    { name: 'Rego (and CTP)', amt: 520, per: 'year', group: 'Car', bill: true }, { name: 'Rent', amt: 300, per: 'week', group: 'Rent', bill: true },
+    { name: 'Phone & wifi', amt: 60, per: 'month', group: 'Phone & wifi', bill: true }];
+  assert.equal(Core.matchBill('car insurance', items), 'Car insurance');
+  assert.equal(Core.matchBill('pay rent', items), 'Rent');
+  assert.equal(Core.matchBill('rego', items), 'Rego (and CTP)');
+  assert.equal(Core.matchBill('phone bill', items), 'Phone & wifi');
+  assert.equal(Core.matchBill('fuel', items), null); // not a bill
+  const s = { takeHome: 1000, europeFund: 0, items, tracker: [], log: [] };
+  const quiet = Core.weekStatus(s, '2026-11-07');
+  const tr = s.tracker, add = (e) => { s.log.push(e); Core.addToTracker(tr, e.t.slice(0, 10), e.group, e.amt); };
+  add({ t: '2026-11-03T09:00:00', name: 'car insurance', amt: 52, group: 'Car', bill: 'Car insurance' });
+  add({ t: '2026-11-04T09:00:00', name: 'petrol', amt: 30, group: 'Car' });
+  const w = Core.weekStatus(s, '2026-11-07');
+  assert.equal(w.save, quiet.save); // paying the bill this week changes nothing; petrol is under the fuel plan
+  assert.equal(w.spent.Car, 30);
+  assert.equal(w.plan.Car, 40);
+  assert.equal(Core.billPaidIn(s.log, '2026-11-02', '2026-11-09'), 52);
+  const bs = Core.billStatus(s, '2026-11-07');
+  assert.deepEqual(bs.map(b => [b.name, b.paid, b.done]), [['Car insurance', 52, true], ['Rego (and CTP)', 0, false], ['Rent', 0, false], ['Phone & wifi', 0, false]]);
 });

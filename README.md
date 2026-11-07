@@ -8,6 +8,8 @@ Open `index.html` in a browser (double-click it). That's it.
 
 - **Log a purchase:** type what you bought ("can of soft drink"), press Enter, type the price, press Enter. The category is guessed for you; tap it to change it and the app remembers your choice next time. Press `/` anywhere to jump back to the box.
 - **Money in and savings:** type "pay" (or "Mum paid me back", "refund") and it switches to **Got paid**. Type "house fund" or "to savings" and it switches to **Saved**, which counts towards a goal. You can also tap Spent / Got paid / Saved yourself.
+- **Bills:** tick "Bill" next to rent, insurance, rego and so on in the Budget tab. Log "car insurance" or "rego" and it's matched to the bill. Bills count at their weekly share every week, so paying a monthly bill doesn't wreck that week, and the Bills list shows what's paid this month.
+- **Earlier dates:** tap the date next to the category to log something from a previous day. It goes back to today after each entry.
 - **Everyday account:** set your bank balance once on This week. After that it moves with everything you log, so you can check it against your bank app.
 - **Goals:** every target and date is editable, including when you want the deposit by. Add your own goals with a weekly amount; that money comes out of the house fund.
 - **Again:** your most-logged items appear as one-tap buttons under the box.

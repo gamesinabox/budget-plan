@@ -37,6 +37,7 @@
     <div class="qmeta">
       <label class="cat" id="q-cat"><span class="dot" id="q-dot"></span><span class="sr">Category</span>
         <select id="q-group" aria-label="Category"></select></label>
+      <label class="cat when"><span class="sr">Date</span><input type="date" id="q-date"></label>
       <span class="cat static" id="q-income" hidden><span class="dot" style="background:var(--good)"></span>Income</span>
       <span class="hint" id="q-hint">Type an item and I'll pick the category. Tap it to change.</span>
     </div>
@@ -91,7 +92,9 @@
 
     <h2>By category <span class="muted" id="w-range"></span></h2>
     <div class="card groups" id="w-groups"></div>
-    <p class="note">Rent and phone &amp; wifi are bills, so they are not in "spending money". Anything you have not logged yet is counted at its full plan, so the saving figure only goes down when you overspend.</p>
+    <h2>Bills <span class="muted" id="w-bills-sum"></span></h2>
+    <div class="card bills" id="w-bills"></div>
+    <p class="note">Bills count at their weekly share every week, whenever you actually pay them, so a monthly bill never makes one week look bad. Choose which items are bills on the Budget tab. Day-to-day spending you haven't logged yet counts at its full plan, so the saving figure only drops when you overspend.</p>
 
     <h2>Recent activity</h2>
     <div class="card log" id="w-log"></div>
@@ -114,12 +117,12 @@
     </div>
     <h3>Spending (enter each amount in its own period)</h3>
     <div class="scroll"><table>
-      <thead><tr><th>Item</th><th class="num">Amount</th><th>Per</th><th>Tracker group</th><th class="num">Weekly</th><th><span class="sr">Remove</span></th></tr></thead>
+      <thead><tr><th>Item</th><th class="num">Amount</th><th>Per</th><th>Tracker group</th><th>Bill</th><th class="num">Weekly</th><th><span class="sr">Remove</span></th></tr></thead>
       <tbody id="items"></tbody>
       <tfoot>
-        <tr><td colspan="4">Total spending</td><td class="num" id="b-spend">-</td><td></td></tr>
-        <tr><td colspan="4">Left to save each week</td><td class="num" id="b-left">-</td><td></td></tr>
-        <tr><td colspan="4">Savings rate</td><td class="num" id="b-rate">-</td><td></td></tr>
+        <tr><td colspan="5">Total spending</td><td class="num" id="b-spend">-</td><td></td></tr>
+        <tr><td colspan="5">Left to save each week</td><td class="num" id="b-left">-</td><td></td></tr>
+        <tr><td colspan="5">Savings rate</td><td class="num" id="b-rate">-</td><td></td></tr>
       </tfoot>
     </table></div>
     <div class="row"><button class="btn" id="add-item" type="button">Add an item</button></div>
@@ -230,7 +233,7 @@
   <!-- TRACKER -->
   <section id="p-tracker" role="tabpanel" aria-labelledby="tab-tracker" hidden>
     <h2>Weekly tracker</h2>
-    <p class="note">One row per week. Purchases you log at the top land here automatically; you can also type totals in directly.</p>
+    <p class="note">One row per week. Purchases you log at the top land here automatically. Over/(under) and Saved count bills at their weekly share; if you type totals in by hand, leave bills out.</p>
     <div class="scroll"><table id="trk-table" style="min-width:880px">
       <thead id="trk-head"></thead>
       <tbody id="trk"></tbody>

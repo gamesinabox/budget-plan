@@ -79,6 +79,17 @@ p{margin:6px 0}
 .quick[data-kind="in"] .add{background:var(--good)}
 .quick[data-kind="in"]{background:linear-gradient(140deg,color-mix(in srgb,var(--good) 10%,var(--surface)),var(--surface) 65%)}
 .cat.static{padding-right:13px;font:600 14px var(--font)}
+.cat.when::after{display:none}
+.when input{border:0;background:transparent;font:600 14px var(--font);color:var(--ink2);padding:0;width:auto;height:100%;cursor:pointer}
+.when input.past{color:var(--s2)}
+.when:has(input.past){border-color:var(--s2);background:color-mix(in srgb,var(--s2) 10%,var(--surface))}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--s1);cursor:pointer}
+td.c{text-align:center}
+.bills{padding:4px 16px}
+.brow{display:grid;grid-template-columns:1fr 130px 230px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--grid)}
+.brow:last-child{border-bottom:0}
+.brow .pill{font-size:12px}
+.brow .gname{white-space:normal}
 .cat[hidden]{display:none}
 .shake{animation:shake .35s} @keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 
@@ -212,6 +223,8 @@ textarea{min-height:120px;font:13px ui-monospace,Menlo,Consolas,monospace}
   .money>div:nth-child(-n+2){border-bottom:1px solid var(--grid)}
   .grow{grid-template-columns:1fr auto;gap:6px 12px}
   .gbar{grid-column:1/-1;grid-row:2}
+  .brow{grid-template-columns:1fr auto;gap:4px 12px}
+  .brow .num{grid-column:1/-1;text-align:left}
   .tabs button{flex:none}
 }
 @media (max-width:520px){

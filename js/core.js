@@ -120,23 +120,51 @@
     return tracker[i];
   }
 
-  const groupPlan = s => Object.fromEntries(GROUPS.map(g => [g, s.items.filter(i => i.group === g).reduce((a, i) => a + weekly(i), 0)]));
+  const groupPlan = (s, pick) => Object.fromEntries(GROUPS.map(g => [g, s.items.filter(i => i.group === g && (!pick || pick(i))).reduce((a, i) => a + weekly(i), 0)]));
+  const inRange = (e, from, to) => { const ds = String(e.t).slice(0, 10); return ds >= from && ds < to; };
+  const billPaidIn = (log, from, to) => sumKind(log, 'out', e => e.bill && inRange(e, from, to));
 
-  /* Week view. Bills are paid on their own schedule, so they are left out of "left to spend".
-     Projected saving assumes any group not yet logged will still cost its full plan. */
-  const BILLS = ['Rent', 'Phone & wifi'];
-  function weekStatus(s, spent, todayDs) {
-    const gp = groupPlan(s);
-    let left = 0, flexPlan = 0, flexSpent = 0, projected = 0;
+  /* Week view. Bills (items ticked as bills in the budget) cost their weekly share every week, whenever you pay them,
+     so a monthly or yearly bill never makes one week look bad. Day-to-day spending not logged yet counts at its full plan. */
+  function weekStatus(s, todayDs) {
+    const i = rowIndexFor(s.tracker || [], todayDs), row = i < 0 ? null : s.tracker[i];
+    const start = row ? row.date : weekStart(todayDs), end = addDays(start, 7);
+    const gp = groupPlan(s, it => !it.bill);
+    const billsWeekly = s.items.filter(it => it.bill).reduce((a, it) => a + weekly(it), 0);
+    // Tracker row may hold totals typed in by hand; take out bill payments logged this week so they aren't counted twice.
+    const billsByGroup = {};
+    (s.log || []).forEach(e => { if ((e.kind || 'out') === 'out' && e.bill && inRange(e, start, end)) billsByGroup[e.group] = num(billsByGroup[e.group]) + num(e.amt); });
+    const spent = {};
+    let left = 0, flexPlan = 0, flexSpent = 0, projected = billsWeekly;
     GROUPS.forEach(g => {
-      const sp = num(spent[g]);
+      const sp = spent[g] = Math.max(0, r2(num(row && row.v[g]) - num(billsByGroup[g])));
       projected += Math.max(gp[g], sp);
-      if (!BILLS.includes(g)) { flexPlan += gp[g]; flexSpent += sp; left += gp[g] - sp; }
+      flexPlan += gp[g]; flexSpent += sp; left += gp[g] - sp;
     });
     const daysLeft = 7 - (d(todayDs).getUTCDay() + 6) % 7;
     const target = plan(s).left;
     const save = num(s.takeHome) - projected;
-    return { plan: gp, left, flexPlan, flexSpent, daysLeft, perDay: left / daysLeft, save, target, short: target - save };
+    return { start, plan: gp, spent, left, flexPlan, flexSpent, billsWeekly, daysLeft, perDay: left / daysLeft, save, target, short: target - save };
+  }
+
+  /* For each bill: what's been paid in its current period (this week, this calendar month, or the last 12 months). */
+  function billStatus(s, todayDs) {
+    const ws = weekStart(todayDs), ym = todayDs.slice(0, 7);
+    return s.items.filter(it => it.bill).map(it => {
+      const k = norm(it.name);
+      const mine = e => (e.kind || 'out') === 'out' && norm(e.bill) === k;
+      const paid = sumKind(s.log, 'out', e => mine(e) && (it.per === 'week' ? inRange(e, ws, addDays(ws, 7))
+        : it.per === 'year' ? inRange(e, addDays(todayDs, -365), addDays(todayDs, 1)) : String(e.t).slice(0, 7) === ym));
+      return { name: it.name, group: it.group, per: it.per, amt: num(it.amt), paid, done: paid >= num(it.amt) - 0.5 };
+    });
+  }
+
+  /* Which bill an entry is paying, if any: a 4+ letter word of the entry that starts a word of a bill's name
+     ("rego" -> "Rego (and CTP)", "car service" -> "Car servicing", "pay rent" -> "Rent"). */
+  function matchBill(text, items) {
+    const words = norm(text).split(' ').filter(w => w.length >= 4 && w !== 'bill' && w !== 'bills');
+    const it = (items || []).find(it => it.bill && norm(it.name).split(' ').some(iw => words.some(w => iw.startsWith(w))));
+    return it ? it.name : null;
   }
 
   /* ---------- money in / out / saved ---------- */
@@ -200,14 +228,14 @@
     (log || []).forEach(e => {
       const k = norm(e.name); if (!k) return;
       const f = m.get(k) || { name: e.name, count: 0 };
-      f.count++; f.amt = e.amt; f.group = e.group; f.name = e.name; f.kind = e.kind || 'out';
+      f.count++; f.amt = e.amt; f.group = e.group; f.name = e.name; f.kind = e.kind || 'out'; f.bill = e.bill;
       m.set(k, f);
     });
     return [...m.values()].sort((a, b) => b.count - a.count).slice(0, n || 6);
   }
 
-  const Core = { GROUPS, BILLS, PER, MON, d, iso, weekly, plan, trip, simulate, combined, target, readyIndex, spare, pay, weeklyPay, monLabel,
+  const Core = { GROUPS, PER, MON, d, iso, weekly, plan, trip, simulate, combined, target, readyIndex, spare, pay, weeklyPay, monLabel,
     norm, guessGroup, addDays, weekStart, rowIndexFor, addToTracker, groupPlan, weekStatus, favourites,
-    endOf, endLabel, afterLabel, guessKind, guessGoal, defaultGoals, sumKind, goalInfo, balance };
+    endOf, endLabel, afterLabel, guessKind, guessGoal, defaultGoals, sumKind, goalInfo, balance, billStatus, matchBill, billPaidIn };
   if (typeof module === 'object' && module.exports) module.exports = Core; else root.Core = Core;
 })(this);

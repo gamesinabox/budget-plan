@@ -3,13 +3,13 @@
 window.DEFAULTS = {
   takeHome: 1200,
   items: [
-    { name: 'Rent', amt: 400, per: 'week', group: 'Rent' },
+    { name: 'Rent', amt: 400, per: 'week', group: 'Rent', bill: true },
     { name: 'Groceries', amt: 100, per: 'week', group: 'Groceries' },
     { name: 'Fuel', amt: 160, per: 'month', group: 'Car' },
-    { name: 'Car insurance', amt: 100, per: 'month', group: 'Car' },
-    { name: 'Rego (and CTP)', amt: 900, per: 'year', group: 'Car' },
-    { name: 'Car servicing', amt: 400, per: 'year', group: 'Car' },
-    { name: 'Phone & wifi', amt: 120, per: 'month', group: 'Phone & wifi' },
+    { name: 'Car insurance', amt: 100, per: 'month', group: 'Car', bill: true },
+    { name: 'Rego (and CTP)', amt: 900, per: 'year', group: 'Car', bill: true },
+    { name: 'Car servicing', amt: 400, per: 'year', group: 'Car', bill: true },
+    { name: 'Phone & wifi', amt: 120, per: 'month', group: 'Phone & wifi', bill: true },
     { name: 'Eating out & social', amt: 80, per: 'week', group: 'Eating out & social' },
     { name: 'Personal, clothes, health & gifts', amt: 50, per: 'week', group: 'Personal & health' },
     { name: 'Buffer (repairs, surprises)', amt: 40, per: 'week', group: 'Buffer' }

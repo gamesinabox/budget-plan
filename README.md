@@ -7,6 +7,9 @@ A personal spending tracker and savings plan. Plain HTML, CSS and JavaScript: no
 Open `index.html` in a browser (double-click it). That's it.
 
 - **Log a purchase:** type what you bought ("can of soft drink"), press Enter, type the price, press Enter. The category is guessed for you; tap it to change it and the app remembers your choice next time. Press `/` anywhere to jump back to the box.
+- **Money in and savings:** type "pay" (or "Mum paid me back", "refund") and it switches to **Got paid**. Type "house fund" or "to savings" and it switches to **Saved**, which counts towards a goal. You can also tap Spent / Got paid / Saved yourself.
+- **Everyday account:** set your bank balance once on This week. After that it moves with everything you log, so you can check it against your bank app.
+- **Goals:** every target and date is editable, including when you want the deposit by. Add your own goals with a weekly amount; that money comes out of the house fund.
 - **Again:** your most-logged items appear as one-tap buttons under the box.
 - **This week:** spending money left (bills excluded), a per-day allowance, whether you're still on track to save your weekly target, and every category against its plan.
 - **Budget / Europe / House / Tracker:** the full savings plan. Logged purchases roll into the Tracker row for their week (Monday start).

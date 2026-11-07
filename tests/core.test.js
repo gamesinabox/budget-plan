@@ -56,3 +56,39 @@ test('week status', () => {
   assert.equal(fav[0].count, 2);
   assert.equal(fav[0].amt, 3.5);
 });
+
+test('money in, out and saved are told apart', () => {
+  const k = s => Core.guessKind(s, {});
+  assert.equal(k('pay'), 'in');
+  assert.equal(k('Mum paid me back'), 'in');
+  assert.equal(k('tax refund'), 'in');
+  assert.equal(k('pay rent'), 'out');
+  assert.equal(k('rent'), 'out');
+  assert.equal(k('car insurance'), 'out');
+  assert.equal(k('to savings'), 'save');
+  assert.equal(k('house fund'), 'save');
+  assert.equal(Core.guessKind('bonus', { bonus: 'out' }), 'out');
+  const goals = Core.defaultGoals({ saveStart: 100 }).concat({ id: 'g1', name: 'New car', target: 5000 });
+  assert.equal(Core.guessGoal('europe fund', goals), 'europe');
+  assert.equal(Core.guessGoal('car savings', goals), 'g1');
+  assert.equal(Core.guessGoal('savings', goals), 'house');
+});
+
+test('goals, deadline and account balance', () => {
+  const s = { takeHome: 1000, europeFund: 100, items: [{ amt: 500, per: 'week', group: 'Rent' }], planStart: '2026-11-06', depart: '2027-11-06',
+    saveStart: 0, rate: 0, price: 100000, depositPct: 10, costs: 0, duty: 0, houseShare: 100, reserve: 0, houseBy: '2027-06',
+    scenarios: { mid: { mult: 1, flight: 0, inter: 0, ins: 0, cont: 0 } }, itinerary: [], fx: 1, travellers: 1, tripShare: 100, ring: 2000, scenario: 'mid',
+    goals: [{ id: 'g1', name: 'Bike', target: 1000, by: '2027-11-06', weekly: 50, start: 0 }],
+    log: [{ t: '2026-11-07T10:00:00', kind: 'save', group: 'g1', amt: 200 }, { t: '2026-11-07T11:00:00', kind: 'in', amt: 1000 }, { t: '2026-11-07T12:00:00', amt: 30 }] };
+  assert.equal(Core.plan(s).housePre, 350); // 1000 - 500 - 100 europe - 50 bike
+  assert.equal(Core.simulate(s, Core.plan(s)).length, 8); // Nov 2026 to Jun 2027
+  assert.equal(Core.endLabel(s), 'Jun 2027');
+  const bike = Core.goalInfo(s, s.goals[0], '2026-11-06');
+  assert.equal(bike.saved, 200);
+  assert.ok(bike.ok); // needs 800 over 52 weeks = 15.4/wk, planning 50
+  const trip = Core.goalInfo(s, { id: 'europe', link: 'europe', start: 0 }, '2026-11-06');
+  assert.equal(trip.target, 2000);
+  assert.equal(Core.balance(s), null);
+  s.bal = { amt: 500, at: '2026-11-07T10:30:00' };
+  assert.equal(Core.balance(s), 1470); // +1000 in, -30 out; the earlier transfer is before the balance was set
+});

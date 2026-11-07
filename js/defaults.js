@@ -26,7 +26,7 @@ window.DEFAULTS = {
     comfy: { mult: 1.35, flight: 3200, inter: 900, ins: 700, cont: 10 }
   },
   price: 800000, depositPct: 20, costs: 5000, duty: 0, houseShare: 50, reserve: 30000,
-  saveStart: 25000, rate: 4, mortRate: 6,
+  saveStart: 25000, rate: 4, mortRate: 6, houseBy: '2030-12',
   tracker: [],
   log: [],
   learned: {}

@@ -71,6 +71,15 @@ p{margin:6px 0}
 .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:999px;padding:5px 11px;font:500 13px var(--font);cursor:pointer}
 .chip b{font-weight:650;color:var(--ink2);font-variant-numeric:tabular-nums}
 .chip:hover{border-color:var(--s1)}
+.kind{display:inline-flex;gap:2px;background:var(--wash);border:1px solid var(--border);border-radius:11px;padding:3px;margin-bottom:10px}
+.kind button{border:0;background:none;border-radius:8px;padding:6px 14px;font:600 14px var(--font);color:var(--ink2);cursor:pointer}
+.kind button[aria-checked="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.kind button[data-kind="in"][aria-checked="true"]{color:var(--good)}
+.kind button[data-kind="save"][aria-checked="true"]{color:var(--s1)}
+.quick[data-kind="in"] .add{background:var(--good)}
+.quick[data-kind="in"]{background:linear-gradient(140deg,color-mix(in srgb,var(--good) 10%,var(--surface)),var(--surface) 65%)}
+.cat.static{padding-right:13px;font:600 14px var(--font)}
+.cat[hidden]{display:none}
 .shake{animation:shake .35s} @keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 
 /* ---------- summary strip ---------- */
@@ -101,6 +110,27 @@ section[hidden]{display:none}
 .meter span{display:block;height:100%;border-radius:99px;transition:width .4s ease}
 .big-save .note{margin-top:8px}
 h2 .muted{font-size:13px;margin-left:6px}
+.money{display:grid;grid-template-columns:repeat(4,1fr);margin-top:12px}
+.money>div{padding:14px 18px;border-right:1px solid var(--grid)}
+.money>div:last-child{border-right:0}
+.mval{font-size:22px;font-weight:720;letter-spacing:-.01em;font-variant-numeric:tabular-nums;margin-top:2px}
+.mval.neg{color:var(--crit)}
+.pos{color:var(--good)}
+.linkbtn{border:0;background:none;padding:0;color:var(--s1);font:600 13px var(--font);cursor:pointer}
+.linkbtn:hover{text-decoration:underline}
+.balform{display:flex;gap:6px;margin-top:6px}
+.balform[hidden]{display:none}
+.balform input{font-size:15px;padding:5px 8px}
+.lrow.k-in .lamt{color:var(--good)}
+.lrow.k-save .lamt{color:var(--s1)}
+.goals{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.goal{padding:16px 18px}
+.ghead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.gtitle{margin:0;font-size:17px;color:var(--ink);font-weight:700}
+.gprog{margin-top:6px;font-size:15px} .gprog b{font-size:24px;letter-spacing:-.01em}
+.gline{font-size:13px;color:var(--ink2);margin:4px 0 8px}
+.gfields{margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.goal a{color:var(--s1)}
 .groups{padding:6px 16px}
 .grow{display:grid;grid-template-columns:200px 1fr 150px;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--grid)}
 .grow:last-child{border-bottom:0}
@@ -177,6 +207,9 @@ textarea{min-height:120px;font:13px ui-monospace,Menlo,Consolas,monospace}
   .strip .tile .note{display:none}
   .strip .tile .pill{grid-column:1/-1;justify-self:start;margin-top:4px;font-size:12px}
   .weekhero{grid-template-columns:1fr}
+  .money{grid-template-columns:1fr 1fr}
+  .money>div:nth-child(2n){border-right:0}
+  .money>div:nth-child(-n+2){border-bottom:1px solid var(--grid)}
   .grow{grid-template-columns:1fr auto;gap:6px 12px}
   .gbar{grid-column:1/-1;grid-row:2}
   .tabs button{flex:none}

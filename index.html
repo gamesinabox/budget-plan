@@ -20,9 +20,14 @@
 
   <!-- QUICK ADD: the thing you open the page for -->
   <form class="card quick" id="quick" autocomplete="off" novalidate>
-    <h2 class="sr">Log a purchase</h2>
+    <h2 class="sr">Log money in or out</h2>
+    <div class="kind" role="radiogroup" aria-label="What kind of entry">
+      <button type="button" role="radio" data-kind="out" aria-checked="true">Spent</button>
+      <button type="button" role="radio" data-kind="in" aria-checked="false">Got paid</button>
+      <button type="button" role="radio" data-kind="save" aria-checked="false">Saved</button>
+    </div>
     <div class="qrow">
-      <label class="qname"><span class="sr">What did you buy?</span>
+      <label class="qname"><span class="sr" id="q-name-lab">What did you buy?</span>
         <input id="q-name" placeholder="What did you buy?" list="q-names" enterkeyhint="next" autofocus required></label>
       <label class="qamt"><span class="sr">Price in dollars</span>
         <span class="dollar" aria-hidden="true">$</span>
@@ -30,8 +35,9 @@
       <button class="add" type="submit">Add</button>
     </div>
     <div class="qmeta">
-      <label class="cat"><span class="dot" id="q-dot"></span><span class="sr">Category</span>
+      <label class="cat" id="q-cat"><span class="dot" id="q-dot"></span><span class="sr">Category</span>
         <select id="q-group" aria-label="Category"></select></label>
+      <span class="cat static" id="q-income" hidden><span class="dot" style="background:var(--good)"></span>Income</span>
       <span class="hint" id="q-hint">Type an item and I'll pick the category. Tap it to change.</span>
     </div>
     <div class="chips" id="q-favs" aria-label="One-tap repeats"></div>
@@ -47,6 +53,7 @@
 
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button role="tab" id="tab-week" aria-controls="p-week" aria-selected="true" data-tab="week">This week</button>
+    <button role="tab" id="tab-goals" aria-controls="p-goals" aria-selected="false" data-tab="goals">Goals</button>
     <button role="tab" id="tab-budget" aria-controls="p-budget" aria-selected="false" data-tab="budget">Budget</button>
     <button role="tab" id="tab-europe" aria-controls="p-europe" aria-selected="false" data-tab="europe">Europe</button>
     <button role="tab" id="tab-timeline" aria-controls="p-timeline" aria-selected="false" data-tab="timeline">House</button>
@@ -71,12 +78,32 @@
       </div>
     </div>
 
+    <div class="card money">
+      <div><div class="lab">Money in</div><div class="mval pos" id="m-in">-</div></div>
+      <div><div class="lab">Money out</div><div class="mval" id="m-out">-</div></div>
+      <div><div class="lab">Moved to savings</div><div class="mval" id="m-save">-</div><div class="note" id="m-save-of"></div></div>
+      <div><div class="lab">Everyday account</div><div class="mval" id="m-bal">-</div>
+        <button type="button" class="linkbtn" id="bal-edit">Set balance</button>
+        <form id="bal-form" class="balform" hidden><label class="sr" for="bal-amt">Balance now ($)</label>
+          <input id="bal-amt" type="number" step="0.01" inputmode="decimal" placeholder="Balance now"><button class="btn" type="submit">Save</button></form>
+      </div>
+    </div>
+
     <h2>By category <span class="muted" id="w-range"></span></h2>
     <div class="card groups" id="w-groups"></div>
     <p class="note">Rent and phone &amp; wifi are bills, so they are not in "spending money". Anything you have not logged yet is counted at its full plan, so the saving figure only goes down when you overspend.</p>
 
-    <h2>Recent purchases</h2>
+    <h2>Recent activity</h2>
     <div class="card log" id="w-log"></div>
+  </section>
+
+  <!-- GOALS -->
+  <section id="p-goals" role="tabpanel" aria-labelledby="tab-goals" hidden>
+    <h2>Your goals</h2>
+    <p class="note">Log a transfer with <b>Saved</b> at the top and it counts towards the goal you pick. Change any target or date here and every plan updates.</p>
+    <div id="goals" class="goals"></div>
+    <div class="row"><button class="btn" id="add-goal" type="button">Add a goal</button></div>
+    <p class="note">Weekly money for goals you add comes out of the house fund, so the deposit date moves when you add one.</p>
   </section>
 
   <!-- BUDGET -->
@@ -106,6 +133,7 @@
       <tbody>
         <tr><td>House fund per week, until the trip</td><td class="num big" id="b-pre">-</td></tr>
         <tr><td>House fund per week, after the trip</td><td class="num big" id="b-post">-</td></tr>
+        <tr><td>Your other goals per week (set in Goals)</td><td class="num" id="b-other">-</td></tr>
       </tbody>
     </table></div>
     <p class="note">Your existing savings stay in the house fund. The trip and ring are paid only from the weekly Europe fund.</p>
@@ -161,6 +189,7 @@
       <label class="f" for="saveStart">Savings at plan start ($)<input id="saveStart" type="number" step="any" min="0" inputmode="decimal" data-bind="saveStart"></label>
       <label class="f" for="rate">Savings interest (% a year)<input id="rate" type="number" step="0.1" min="0" inputmode="decimal" data-bind="rate"></label>
       <label class="f" for="mortRate">Home loan rate (% a year)<input id="mortRate" type="number" step="0.05" min="0" inputmode="decimal" data-bind="mortRate"></label>
+      <label class="f" for="houseBy">Want the deposit by (month)<input id="houseBy" type="month" data-bind="houseBy"></label>
     </div>
     <p class="note">Stamp duty is $0 for eligible first home buyers up to $800,000 in NSW. Check eligibility with Revenue NSW or a broker.</p>
 
